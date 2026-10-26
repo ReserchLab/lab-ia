@@ -23,6 +23,10 @@ export class Gateway {
       url: (process.env.FREELLMAPI_URL || ia.FREELLMAPI_URL || 'http://127.0.0.1:31415').replace(/\/+$/, ''),
       clave: process.env.FREELLMAPI_API_KEY || ia.FREELLMAPI_API_KEY || '',
       token: process.env.FREELLMAPI_DASHBOARD_TOKEN || ia.FREELLMAPI_DASHBOARD_TOKEN || '',
+      // Opcionales, para imágenes de calidad: Workers AI de tu Cloudflare y clave de Pollinations.
+      cfCuenta: process.env.CLOUDFLARE_ACCOUNT_ID || ia.CLOUDFLARE_ACCOUNT_ID || '',
+      cfToken: process.env.CLOUDFLARE_API_TOKEN || ia.CLOUDFLARE_API_TOKEN || '',
+      pollinations: process.env.POLLINATIONS_API_KEY || ia.POLLINATIONS_API_KEY || '',
     };
   }
 
@@ -126,8 +130,40 @@ export class Gateway {
   }
 
   /** Devuelve { datos: Buffer, tipo, modelo }. */
-  async imagen(prompt, { modelo = 'auto', ancho = 1024, alto = 1024 } = {}) {
+  /** Workers AI por la API REST de Cloudflare (los modelos devuelven JSON con base64 o la imagen en binario). */
+  async imagenWorkersAI(modelo, prompt, ancho, alto) {
+    const { cfCuenta, cfToken } = this.cfg;
+    const cuerpo = modelo.includes('flux-1-schnell') ? { prompt, steps: 8 } : { prompt, width: ancho, height: alto };
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfCuenta}/ai/run/${modelo}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${cfToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+      signal: AbortSignal.timeout(180_000),
+    });
+    const tipo = r.headers.get('content-type') || '';
+    if (tipo.startsWith('image/')) return { datos: Buffer.from(await r.arrayBuffer()), tipo, modelo: `workersai/${modelo}` };
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.result?.image) throw new Error(/4006|daily free allocation/.test(JSON.stringify(d)) ? 'Workers AI: cuota diaria agotada' : `Workers AI: ${d.errors?.[0]?.message || `HTTP ${r.status}`}`);
+    return { datos: Buffer.from(d.result.image, 'base64'), tipo: 'image/jpeg', modelo: `workersai/${modelo}` };
+  }
+
+  /**
+   * Cadena de imagen: Workers AI de tu Cloudflare (si está configurado) → FreeLLMAPI →
+   * Pollinations con tu clave (FLUX real, sin marca) → Pollinations sin clave (modelo rebajado, con marca).
+   */
+  async imagen(prompt, { modelo = 'auto', ancho = 1024, alto = 1024, estilo = 'fotorrealista', calidad = 'rapida' } = {}) {
     const errores = [];
+    const { cfCuenta, cfToken, pollinations } = this.cfg;
+    if (modelo.startsWith('workersai/')) return this.imagenWorkersAI(modelo.slice(10), prompt, ancho, alto);
+    if (modelo === 'auto' && cfCuenta && cfToken) {
+      const alta = estilo === 'fotorrealista' ? ['@cf/leonardo/lucid-origin', '@cf/black-forest-labs/flux-2-dev'] : ['@cf/black-forest-labs/flux-2-dev', '@cf/leonardo/lucid-origin'];
+      for (const m of [...(calidad === 'alta' ? alta : []), '@cf/black-forest-labs/flux-1-schnell']) {
+        try { return await this.imagenWorkersAI(m, prompt, ancho, alto); } catch (e) {
+          errores.push(e.message);
+          if (/cuota diaria/.test(e.message)) break;
+        }
+      }
+    }
     if (!modelo.startsWith('pollinations/')) {
       try {
         const d = await this.json('/v1/images/generations', {
@@ -147,15 +183,20 @@ export class Gateway {
         }
         errores.push('FreeLLMAPI no devolvió imagen');
       } catch (e) {
-        errores.push(e.message);
+        errores.push(`FreeLLMAPI: ${e.message}`);
         if (modelo !== 'auto') throw e;
       }
     }
     const variante = modelo.startsWith('pollinations/') ? modelo.split('/')[1] : 'flux';
     const semilla = Math.floor(Math.random() * 1e9);
+    if (pollinations) {
+      const r = await fetch(`https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=${ancho}&height=${alto}&model=${variante}&nologo=true&seed=${semilla}`, { headers: { Authorization: `Bearer ${pollinations}` }, signal: AbortSignal.timeout(180_000) });
+      if (r.ok) return { datos: Buffer.from(await r.arrayBuffer()), tipo: r.headers.get('content-type') || 'image/jpeg', modelo: `pollinations/${variante}` };
+      errores.push(`Pollinations con clave: HTTP ${r.status}`);
+    }
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${ancho}&height=${alto}&model=${variante}&nologo=true&seed=${semilla}`;
     const r = await fetch(url, { signal: AbortSignal.timeout(180_000) });
     if (!r.ok) throw new Error(`No se pudo generar la imagen (${[...errores, `Pollinations ${r.status}`].join('; ')})`);
-    return { datos: Buffer.from(await r.arrayBuffer()), tipo: r.headers.get('content-type') || 'image/jpeg', modelo: `pollinations/${variante}` };
+    return { datos: Buffer.from(await r.arrayBuffer()), tipo: r.headers.get('content-type') || 'image/jpeg', modelo: `pollinations/${variante} (sin clave: calidad baja)` };
   }
 }

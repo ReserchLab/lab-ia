@@ -27,6 +27,9 @@ defaults() {
 save() {
   mkdir -p "$CONF_DIR"
   umask 077
+  # Conserva las líneas que este menú no maneja (p. ej. CLOUDFLARE_* o POLLINATIONS_API_KEY de lab.ia).
+  local extra=""
+  [ -f "$CONF" ] && extra=$(grep -v -E '^(FREELLMAPI_URL|FREELLMAPI_API_KEY|IA_MODEL_CLAUDE|IA_MODEL_CODEX|IA_DIR|FREELLMAPI_DASHBOARD_TOKEN)=' "$CONF")
   cat > "$CONF" <<EOF
 FREELLMAPI_URL="$FREELLMAPI_URL"
 FREELLMAPI_API_KEY="$FREELLMAPI_API_KEY"
@@ -35,6 +38,7 @@ IA_MODEL_CODEX="$IA_MODEL_CODEX"
 IA_DIR="$IA_DIR"
 FREELLMAPI_DASHBOARD_TOKEN="$FREELLMAPI_DASHBOARD_TOKEN"
 EOF
+  [ -n "$extra" ] && printf '%s\n' "$extra" >> "$CONF"
   chmod 600 "$CONF"
 }
 

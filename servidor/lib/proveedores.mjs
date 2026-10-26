@@ -20,15 +20,15 @@ const RECOMENDADOS = {
 // Funcionan sin clave aunque el servidor no los marque como keyless.
 const ANONIMOS = { llm7: 'unused' };
 
-function guardarToken(token) {
+function guardarEnConfig(variable, valor) {
   if (!existsSync(CONFIG_IA)) return;
   const texto = readFileSync(CONFIG_IA, 'utf8');
-  const linea = `FREELLMAPI_DASHBOARD_TOKEN="${token}"`;
-  const nuevo = /^FREELLMAPI_DASHBOARD_TOKEN=.*$/m.test(texto)
-    ? texto.replace(/^FREELLMAPI_DASHBOARD_TOKEN=.*$/m, linea)
-    : `${texto.trimEnd()}\n${linea}\n`;
+  const linea = `${variable}="${valor}"`;
+  const re = new RegExp(`^${variable}=.*$`, 'm');
+  const nuevo = re.test(texto) ? texto.replace(re, linea) : `${texto.trimEnd()}\n${linea}\n`;
   writeFileSync(CONFIG_IA, nuevo, { mode: 0o600 });
 }
+const guardarToken = token => guardarEnConfig('FREELLMAPI_DASHBOARD_TOKEN', token);
 
 function enlaces() {
   const mapa = {};
@@ -105,6 +105,8 @@ export class Proveedores {
 
   /** Guarda la clave y la comprueba con el chequeo de salud del gateway. */
   async agregar(plataforma, clave) {
+    // lab.ia usa la clave de Pollinations directamente para las imágenes (FLUX real, sin marca de agua).
+    if (plataforma === 'pollinations') guardarEnConfig('POLLINATIONS_API_KEY', clave);
     const r = await this.tablero('/api/keys', 'POST', { platform: plataforma, key: clave });
     let estado = 'desconocido';
     let detalle = '';

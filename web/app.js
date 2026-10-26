@@ -22,6 +22,15 @@
   };
 
   const TAMANOS = { cuadrado: 'Cuadrada', vertical: 'Vertical', horizontal: 'Horizontal' };
+  const ESTILOS = {
+    fotorrealista: ['◉', 'Fotorrealista', 'Como una fotografía profesional: cámara, lente e iluminación reales'],
+    cientifica: ['⌬', 'Ilustración científica', 'Estilo portada de Nature o Cell, estructuras precisas'],
+    render3d: ['◈', 'Render 3D', 'Materiales realistas, iluminación cinematográfica'],
+    microscopia: ['⁘', 'Microscopía', 'Fluorescencia, electrónica de barrido o histología'],
+    infografia: ['⊞', 'Esquema', 'Diagrama limpio y minimalista, sin texto'],
+    arte: ['✦', 'Arte', 'Interpretación artística libre'],
+  };
+  const estiloActual = () => prefs.estilo || (prefs.skill === 'ilustracion-cientifica' ? 'cientifica' : prefs.skill === 'imagen-creativa' ? 'arte' : 'fotorrealista');
   const MODOS = { chat: 'Chat', investigar: 'Investigar', imagen: 'Imagen' };
   const PLACEHOLDER = {
     chat: 'Pregunta lo que quieras…',
@@ -220,7 +229,7 @@
     $('#chip-tamano').hidden = modo !== 'imagen';
     const f = fuentesActivas();
     $('#chip-fuentes span').textContent = f.length > 2 ? `${f.length} fuentes` : f.map(id => est.fuentes.find(x => x.id === id)?.nombre || id).join(', ');
-    $('#chip-tamano span').textContent = TAMANOS[prefs.tamano];
+    $('#chip-tamano span').textContent = `${ESTILOS[estiloActual()][1]} · ${prefs.calidad === 'alta' ? 'alta' : 'rápida'} · ${TAMANOS[prefs.tamano].toLowerCase()}`;
     const modelo = modo === 'imagen' ? prefs.modeloImagen : prefs.modeloTexto;
     let etiqueta = modelo === 'auto' ? 'auto' : nombreModelo(modelo);
     if (modelo === 'auto') {
@@ -546,7 +555,7 @@
     if (meta.combinacion) pintarCombinacion(div, m);
     if (meta.imagenes?.length) {
       div.querySelector('.imagenes').innerHTML = meta.imagenes.map(u => `<div class="imagen-gen"><img src="${esc(u)}" alt="${esc(meta.prompt || 'Imagen generada')}" loading="lazy"></div>`).join('')
-        + (meta.prompt ? `<div class="prompt-usado">${esc(meta.prompt)}</div>` : '');
+        + (meta.prompt ? `<div class="prompt-usado">${meta.estilo && ESTILOS[meta.estilo] ? `${esc(ESTILOS[meta.estilo][1])}${meta.calidad === 'alta' ? ' · alta' : ''} · ` : ''}${esc(meta.prompt)}</div>` : '');
     }
     const cuerpo = div.querySelector('.cuerpo');
     cuerpo.innerHTML = window.renderMd(m.contenido || '', meta.fuentes);
@@ -723,6 +732,7 @@
         body: JSON.stringify({
           conversacion: est.conv, texto: contenido, regenerar, modo: prefs.modo, skill: prefs.skill,
           modelo: prefs.modeloTexto, modeloImagen: prefs.modeloImagen, tamano: prefs.tamano,
+          estilo: estiloActual(), calidad: prefs.calidad === 'alta' ? 'alta' : 'rapida',
           combinar: prefs.modo !== 'imagen' && prefs.combinar?.activa && prefs.combinar.modelos.length >= 2
             ? { modelos: prefs.combinar.modelos, integrador: prefs.combinar.integrador, mostrar: prefs.combinar.mostrar } : undefined,
           fuentes: prefs.modo === 'investigar' ? fuentesActivas() : undefined,
@@ -1007,11 +1017,24 @@
   }
 
   function hojaTamano() {
-    const html = Object.entries(TAMANOS).map(([k, v]) => `<button class="opcion${prefs.tamano === k ? ' activa' : ''}" data-t="${k}"><span class="ic">${k === 'cuadrado' ? '◻' : k === 'vertical' ? '▯' : '▭'}</span><span class="txt"><span class="nm">${v}</span></span></button>`).join('');
-    abrirHoja('Tamaño de imagen', html, cuerpo => cuerpo.addEventListener('click', e => {
-      const t = e.target.closest('[data-t]');
-      if (t) { prefs.tamano = t.dataset.t; guardarPrefs(); pintarChips(); cerrarHoja(); }
-    }));
+    const est_ = estiloActual();
+    const html = `<div class="cat-skill" style="margin-top:4px">Estilo</div>
+      ${Object.entries(ESTILOS).map(([k, [ic, nm, ds]]) => `<button class="opcion${est_ === k ? ' activa' : ''}" data-estilo="${k}"><span class="ic">${ic}</span><span class="txt"><span class="nm">${nm}</span><span class="ds">${ds}</span></span></button>`).join('')}
+      <div class="cat-skill">Calidad</div>
+      <button class="opcion${prefs.calidad !== 'alta' ? ' activa' : ''}" data-calidad="rapida"><span class="ic">⚡</span><span class="txt"><span class="nm">Rápida</span><span class="ds">FLUX.1 schnell: segundos, gasta poca cuota</span></span></button>
+      <button class="opcion${prefs.calidad === 'alta' ? ' activa' : ''}" data-calidad="alta"><span class="ic">◆</span><span class="txt"><span class="nm">Alta (profesional)</span><span class="ds">Leonardo Lucid Origin / FLUX.2 dev: más detalle y realismo, gasta más cuota</span></span></button>
+      <div class="cat-skill">Tamaño</div>
+      ${Object.entries(TAMANOS).map(([k, v]) => `<button class="opcion${prefs.tamano === k ? ' activa' : ''}" data-t="${k}"><span class="ic">${k === 'cuadrado' ? '◻' : k === 'vertical' ? '▯' : '▭'}</span><span class="txt"><span class="nm">${v}</span></span></button>`).join('')}
+      <div class="fila-botones"><button class="btn primario" data-op="listo">Listo</button></div>`;
+    abrirHoja('Imagen', html, cuerpo => cuerpo.addEventListener('click', e => {
+      const b = e.target.closest('[data-estilo],[data-calidad],[data-t],[data-op]');
+      if (!b) return;
+      if (b.dataset.estilo) prefs.estilo = b.dataset.estilo;
+      if (b.dataset.calidad) prefs.calidad = b.dataset.calidad;
+      if (b.dataset.t) prefs.tamano = b.dataset.t;
+      guardarPrefs(); pintarChips();
+      if (b.dataset.op === 'listo') cerrarHoja(); else hojaTamano();
+    }), true);
   }
 
   async function hojaModelo() {

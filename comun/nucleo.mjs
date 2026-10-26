@@ -12,6 +12,17 @@ import { publica } from './skills.mjs';
 
 export const TAMANOS = { cuadrado: [1024, 1024], vertical: [768, 1344], horizontal: [1344, 768] };
 
+// Estilos de imagen: guía para que el prompt describa la imagen como lo haría un profesional del género.
+export const ESTILOS = {
+  fotorrealista: { nombre: 'Fotorrealista', guia: 'A professional photograph. Name the camera type (full-frame DSLR or mirrorless), the lens (e.g. 35 mm, 85 mm portrait, 100 mm macro), aperture and depth of field, and the exact lighting (golden-hour sunlight, overcast softbox, rim light…). Realistic textures, accurate proportions and true-to-life colors, sharp focus on the subject. It must not look like an illustration, painting or CGI.' },
+  cientifica: { nombre: 'Ilustración científica', guia: 'An editorial scientific illustration in the style of a Nature or Cell cover: anatomically and molecularly accurate structures, clean balanced composition, cutaway or cross-section when it explains the subject, soft volumetric lighting, refined harmonious palette, very high detail.' },
+  render3d: { nombre: 'Render 3D', guia: 'A high-end cinematic 3D render: physically based materials, global illumination, ambient occlusion, subtle depth of field, studio backdrop, crisp micro-detail.' },
+  microscopia: { nombre: 'Microscopía', guia: 'A realistic microscopy image. Name the technique (confocal fluorescence, scanning electron microscopy, phase contrast or H&E histology), the magnification, and the characteristic colors, contrast and textures of that technique, with scale-appropriate detail.' },
+  infografia: { nombre: 'Esquema', guia: 'A clean, minimal flat vector-style scientific diagram with clear shapes and arrows, consistent limited palette and plain background. Leave space for labels but do not write any text.' },
+  arte: { nombre: 'Arte', guia: 'An artistic interpretation: choose the art style, medium and palette that best fit the request, with expressive lighting and strong composition.' },
+};
+export const CALIDADES = { rapida: 'Rápida', alta: 'Alta' };
+
 export const SISTEMA_BASE = `Eres lab.ia, un asistente de investigación y creación.
 - Responde en el idioma del usuario (español por defecto), con Markdown claro: títulos cortos, listas y tablas cuando ayuden.
 - Para fórmulas usa notación legible en texto; para código, bloques con el lenguaje indicado.
@@ -249,21 +260,28 @@ export function crearNucleo({ gateway, almacen, skills, tareas, guardarImagen, p
       await antesDeResponder?.(emitir, señal);
       if (modo === 'imagen') {
         const [ancho, alto] = TAMANOS[p.tamano] || TAMANOS.cuadrado;
-        emitir('estado', { texto: 'Preparando el prompt…' });
+        const estilo = ESTILOS[p.estilo] ? p.estilo : skill?.id === 'ilustracion-cientifica' ? 'cientifica' : skill?.id === 'imagen-creativa' ? 'arte' : 'fotorrealista';
+        const calidad = p.calidad === 'alta' ? 'alta' : 'rapida';
+        emitir('estado', { texto: `Preparando el prompt (${ESTILOS[estilo].nombre.toLowerCase()})…` });
         let prompt = pregunta;
         try {
           const { texto: mejorado = '' } = await gateway.completar([
-            { role: 'system', content: `${skill ? skills.sistema(skill) + '\n\n' : ''}Reescribe la petición como un prompt en inglés para un modelo de difusión de imágenes: sujeto, composición, estilo, iluminación y detalles técnicos, en una sola línea de menos de 80 palabras. Devuelve SOLO el prompt.` },
+            { role: 'system', content: `${skill ? skills.sistema(skill) + '\n\n' : ''}You are an expert prompt writer for FLUX and Leonardo image models.
+Turn the user's request into ONE English prompt of 60-120 words written as natural descriptive sentences (not a list of tags):
+the main subject with precise, accurate details; the setting; composition and framing; lighting; colors; materials and textures.
+Style: ${ESTILOS[estilo].guia}
+Keep any scientific content accurate. Never ask for text, letters, captions, watermarks or logos in the image.
+Return ONLY the prompt.` },
             { role: 'user', content: pregunta },
-          ], { modelo: rapido, max: 1200, temperatura: 0.7 });
+          ], { modelo: rapido, max: 1500, temperatura: 0.6 });
           const limpio = mejorado.replace(/<think>[\s\S]*?<\/think>/g, '').trim().replace(/^["']|["']$/g, '');
-          if (limpio && limpio.length < 1200) prompt = limpio;
+          if (limpio && limpio.length < 2000) prompt = limpio;
         } catch { /* sin LLM se usa la petición tal cual */ }
-        emitir('estado', { texto: 'Generando la imagen…', prompt });
+        emitir('estado', { texto: `Generando la imagen (calidad ${CALIDADES[calidad].toLowerCase()})…`, prompt });
         const modeloImagen = p.modeloImagen && p.modeloImagen !== 'auto' ? p.modeloImagen : await modeloTarea('imagen');
-        const img = await gateway.imagen(prompt, { modelo: modeloImagen, ancho, alto });
+        const img = await gateway.imagen(prompt, { modelo: modeloImagen, ancho, alto, estilo, calidad });
         const url = await guardarImagen(img.datos, img.tipo);
-        const meta = { modo, imagenes: [url], prompt, modelo: img.modelo, skill: skill?.id || null };
+        const meta = { modo, imagenes: [url], prompt, modelo: img.modelo, estilo, calidad, skill: skill?.id || null };
         const id = await almacen.agregar(conv, 'assistant', '', meta);
         emitir('fin', { id, ...meta });
         return;
@@ -419,7 +437,7 @@ Usa modo "investigar" si la skill necesita evidencia publicada; "imagen" si gene
   }
 
   return {
-    FUENTES, TAREAS, explicarError, metaDe, publica,
+    FUENTES, TAREAS, ESTILOS, explicarError, metaDe, publica,
     prepararChat, chat, generarSkill, recomendarModelos, listarTareas, recomendarTareas, probarModelo, verificarMensaje, revisarMensaje,
   };
 }

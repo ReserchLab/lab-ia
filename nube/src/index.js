@@ -20,6 +20,7 @@ const json = (datos, estado = 200, extra = {}) => new Response(JSON.stringify(da
 
 function explicarNube(e) {
   const m = e?.message || '';
+  if (e?.imagen) return m; // los errores de imagen ya explican qué hacer
   if (/No search key configured/.test(m)) return 'sin buscador web: añade una clave gratis de Tavily en Ajustes → Modelos y proveedores';
   if (/not available on the Workers Free|5035/.test(m)) return 'Ese modelo de Workers AI no está en el plan gratuito de Cloudflare. Elige otro o usa «auto».';
   if (/neurons|daily free allocation|4006/.test(m)) return 'Se acabaron las 10 000 neuronas gratis de Workers AI de hoy. Añade la clave de otro proveedor (Groq, Gemini…) o espera a mañana (00:00 UTC).';

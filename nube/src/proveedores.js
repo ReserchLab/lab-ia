@@ -26,7 +26,7 @@ const WAI_TEXTO = [
 
 // entrada: forma de la petición; salida: JSON con base64 o binario.
 const WAI_IMAGEN = [
-  { id: '@cf/black-forest-labs/flux-1-schnell', nombre: 'FLUX.1 schnell', entrada: (p) => ({ prompt: p.prompt, steps: 6 }) },
+  { id: '@cf/black-forest-labs/flux-1-schnell', nombre: 'FLUX.1 schnell', entrada: (p) => ({ prompt: p.prompt, steps: 8 }) },
   { id: '@cf/black-forest-labs/flux-2-dev', nombre: 'FLUX.2 dev', entrada: (p) => ({ prompt: p.prompt, width: p.ancho, height: p.alto }) },
   { id: '@cf/leonardo/lucid-origin', nombre: 'Leonardo Lucid Origin', entrada: (p) => ({ prompt: p.prompt, width: p.ancho, height: p.alto }) },
   { id: '@cf/leonardo/phoenix-1.0', nombre: 'Leonardo Phoenix 1.0', entrada: (p) => ({ prompt: p.prompt, width: p.ancho, height: p.alto }) },
@@ -37,7 +37,7 @@ const WAI_IMAGEN = [
 export const CATALOGO = [
   { id: 'workersai', nombre: 'Cloudflare Workers AI', sinClave: true, nota: 'incluido en tu cuenta: 10 000 neuronas al día gratis', enlace: 'https://dash.cloudflare.com/?to=/:account/ai/workers-ai' },
   { id: 'kilo', nombre: 'Kilo Gateway', base: 'https://api.kilo.ai/api/gateway', sinClave: true, filtro: id => /:free$/.test(id), nota: 'modelos :free sin clave', enlace: 'https://app.kilo.ai' },
-  { id: 'pollinations', nombre: 'Pollinations', base: 'https://text.pollinations.ai/openai', sinClave: true, nota: 'texto e imágenes sin clave; con clave, sin marca de agua', enlace: 'https://enter.pollinations.ai', recomendado: 'Imágenes sin marca de agua' },
+  { id: 'pollinations', nombre: 'Pollinations', base: 'https://text.pollinations.ai/openai', sinClave: true, nota: 'texto sin clave; imágenes con clave gratis', enlace: 'https://enter.pollinations.ai', recomendado: 'Imágenes FLUX cuando se agota Workers AI (desde Cloudflare, sin clave casi siempre está al límite)' },
   { id: 'ovh', nombre: 'OVH AI Endpoints', base: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1', sinClave: true, nota: 'sin clave: 2 peticiones por minuto', enlace: 'https://endpoints.ai.cloud.ovh.net' },
   { id: 'tavily', nombre: 'Tavily', tipo: 'busqueda', nota: '1000 búsquedas al mes gratis', enlace: 'https://app.tavily.com/home', recomendado: 'Búsqueda web: sin ella, Investigar usa solo las bases académicas' },
   { id: 'groq', nombre: 'Groq', base: 'https://api.groq.com/openai/v1', nota: 'gratis, muy rápido', enlace: 'https://console.groq.com/keys', recomendado: 'Texto muy rápido y gratis' },
@@ -47,7 +47,7 @@ export const CATALOGO = [
   { id: 'mistral', nombre: 'Mistral', base: 'https://api.mistral.ai/v1', filtro: id => !/embed|moderation|ocr/.test(id), nota: 'plan gratuito de experimentación', enlace: 'https://console.mistral.ai/api-keys/' },
   { id: 'nvidia', nombre: 'NVIDIA NIM', base: 'https://integrate.api.nvidia.com/v1', filtro: id => !/embed|rerank|guard|reward|parse|clip|retriever/.test(id), nota: 'créditos gratis', enlace: 'https://build.nvidia.com/settings/api-keys' },
   { id: 'github', nombre: 'GitHub Models', base: 'https://models.github.ai/inference', nota: 'token de GitHub con permiso models:read', enlace: 'https://github.com/settings/personal-access-tokens' },
-  { id: 'huggingface', nombre: 'Hugging Face', base: 'https://router.huggingface.co/v1', nota: 'créditos mensuales gratis', enlace: 'https://huggingface.co/settings/tokens' },
+  { id: 'huggingface', nombre: 'Hugging Face', base: 'https://router.huggingface.co/v1', nota: 'créditos mensuales gratis; texto e imágenes FLUX.1', enlace: 'https://huggingface.co/settings/tokens', recomendado: 'Imágenes FLUX.1 de respaldo' },
   { id: 'sambanova', nombre: 'SambaNova', base: 'https://api.sambanova.ai/v1', nota: 'gratis con límites', enlace: 'https://cloud.sambanova.ai/apis' },
   { id: 'cohere', nombre: 'Cohere', base: 'https://api.cohere.ai/compatibility/v1', filtro: id => /command/.test(id), nota: 'clave de prueba gratis', enlace: 'https://dashboard.cohere.com/api-keys' },
   { id: 'llm7', nombre: 'LLM7', base: 'https://api.llm7.io/v1', nota: 'clave gratis', enlace: 'https://dash.llm7.io/#/api-keys' },
@@ -158,10 +158,10 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
 
   async function modelosImagen() {
     return [
-      { id: 'auto', nombre: 'Automático (FLUX.1 → Pollinations)' },
+      { id: 'auto', nombre: 'Automático (según estilo y calidad; respaldo con tus claves)' },
       ...WAI_IMAGEN.map(m => ({ id: `workersai/${m.id}`, nombre: `${m.nombre} · Workers AI` })),
-      { id: 'pollinations/flux', nombre: 'Pollinations FLUX (sin clave)' },
-      { id: 'pollinations/turbo', nombre: 'Pollinations Turbo (sin clave)' },
+      { id: 'pollinations/flux', nombre: 'Pollinations FLUX (con tu clave gratis)' },
+      { id: 'huggingface/black-forest-labs/FLUX.1-schnell', nombre: 'FLUX.1 schnell · Hugging Face (con tu token)' },
     ];
   }
 
@@ -262,17 +262,44 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
     throw ultimo || new Error('sin proveedores');
   }
 
-  async function imagen(prompt, { modelo = 'auto', ancho = 1024, alto = 1024 } = {}) {
-    let intentos = modelo === 'auto' ? ['workersai/@cf/black-forest-labs/flux-1-schnell', 'pollinations/flux'] : [modelo];
-    if (modelo === 'auto' && await waiAgotado()) intentos = ['pollinations/flux', 'pollinations/turbo'];
+  // Cadena de imagen: Workers AI (sin clave) → Pollinations y Hugging Face con la clave del usuario.
+  // Desde Cloudflare los servicios de imagen sin clave rechazan la petición (IP compartida), así que
+  // cuando se agota la cuota diaria de Workers AI hace falta una clave gratis de alguno de los dos.
+  async function imagen(prompt, { modelo = 'auto', ancho = 1024, alto = 1024, estilo = 'fotorrealista', calidad = 'rapida' } = {}) {
+    let intentos;
+    if (modelo !== 'auto') intentos = [modelo];
+    else {
+      const wai = calidad === 'alta'
+        ? (estilo === 'fotorrealista' ? ['@cf/leonardo/lucid-origin', '@cf/black-forest-labs/flux-2-dev'] : ['@cf/black-forest-labs/flux-2-dev', '@cf/leonardo/lucid-origin'])
+        : [];
+      intentos = [...wai, '@cf/black-forest-labs/flux-1-schnell'].map(m => `workersai/${m}`);
+      if (await waiAgotado()) intentos = [];
+      intentos.push('pollinations/flux', 'huggingface/black-forest-labs/FLUX.1-schnell');
+    }
     const errores = [];
     for (const m of intentos) {
       try {
         if (m.startsWith('pollinations/')) {
           const clave = await claveDe('pollinations');
-          const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${ancho}&height=${alto}&model=${m.split('/')[1]}&nologo=true&seed=${Math.floor(Math.random() * 1e9)}`;
+          const sem = Math.floor(Math.random() * 1e9);
+          const url = clave
+            ? `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=${ancho}&height=${alto}&model=${m.split('/')[1]}&nologo=true&seed=${sem}`
+            : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${ancho}&height=${alto}&model=${m.split('/')[1]}&nologo=true&seed=${sem}`;
           const r = await fetch(url, { headers: clave ? { Authorization: `Bearer ${clave}` } : {}, signal: AbortSignal.timeout(120_000) });
-          if (!r.ok) throw new Error(`Pollinations HTTP ${r.status}`);
+          if (!r.ok) throw new Error(r.status === 402 || r.status === 401 ? 'sin clave, límite de la IP compartida' : `HTTP ${r.status}`);
+          const datos = new Uint8Array(await r.arrayBuffer());
+          return { datos, tipo: r.headers.get('content-type') || tipoImagen(datos), modelo: m };
+        }
+        if (m.startsWith('huggingface/')) {
+          const clave = await claveDe('huggingface');
+          if (!clave) { errores.push('Hugging Face: sin token'); continue; }
+          const r = await fetch(`https://router.huggingface.co/hf-inference/models/${m.slice('huggingface/'.length)}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${clave}`, 'Content-Type': 'application/json', Accept: 'image/png' },
+            body: JSON.stringify({ inputs: prompt, parameters: { width: ancho, height: alto } }),
+            signal: AbortSignal.timeout(120_000),
+          });
+          if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 120)}`);
           const datos = new Uint8Array(await r.arrayBuffer());
           return { datos, tipo: r.headers.get('content-type') || tipoImagen(datos), modelo: m };
         }
@@ -280,14 +307,18 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
         if (!def) throw new Error(`Modelo de imagen desconocido: ${m}`);
         let salida;
         try { salida = await env.AI.run(def.id, def.entrada({ prompt, ancho, alto })); } catch (e) {
-          if (/4006|daily free allocation/.test(e.message)) await marcarAgotado();
+          if (/4006|daily free allocation/.test(e.message)) { await marcarAgotado(); throw new Error('cuota diaria agotada'); }
           throw e;
         }
         const datos = await aBytes(salida);
         return { datos, tipo: tipoImagen(datos), modelo: m };
-      } catch (e) { errores.push(`${m.split('/').pop()}: ${e.message}`); }
+      } catch (e) { errores.push(`${m.split('/').slice(1).join('/').replace('@cf/', '')}: ${e.message}`); }
     }
-    throw new Error(`No se pudo generar la imagen (${errores.join(' · ')})`);
+    const tieneClaves = Boolean(await claveDe('pollinations')) || Boolean(await claveDe('huggingface'));
+    if (modelo === 'auto' && (await waiAgotado()) && !tieneClaves) {
+      throw Object.assign(new Error('Hoy se acabó la cuota gratis de imágenes de Workers AI (vuelve a las 00:00 UTC). Para seguir generando ya, añade una clave gratis de Pollinations (https://enter.pollinations.ai) o un token de Hugging Face (https://huggingface.co/settings/tokens) en Ajustes → Modelos y proveedores.'), { imagen: true });
+    }
+    throw Object.assign(new Error(`No se pudo generar la imagen. ${errores.join(' · ')}`), { imagen: true });
   }
 
   async function buscar(consulta, n = 5) {
