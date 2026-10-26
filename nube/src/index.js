@@ -72,7 +72,9 @@ async function api(request, env, ctx, ruta, invitado) {
     if (ruta === '/api/chat' && metodo === 'POST') {
       const p = await cuerpo();
       if (p.modo === 'imagen') return json({ error: 'Las imágenes no están en la versión de prueba. En tu propio lab.ia sí: https://labia-ciencia.pages.dev' }, 403);
-      if (!p.regenerar || p.conversacion) await demo.consumir(env, request, invitado.id, p.modo);
+      if (Array.isArray(p.combinar?.modelos)) p.combinar.modelos = p.combinar.modelos.slice(0, demo.LIMITES.modelosCombinados);
+      const peso = p.combinar?.modelos?.length >= 2 ? p.combinar.modelos.length : 1;
+      await demo.consumir(env, request, invitado.id, p.modo, peso);
     }
   }
 

@@ -6,7 +6,7 @@ import { galletaSesion, usuarioDeSesion } from './cuentas.js';
 export const esDemo = env => env.DEMO === 'si';
 
 // Por día (UTC): por invitado, por IP (por si se borra la galleta) y para toda la demo.
-export const LIMITES = { chat: 20, investigar: 6, ip: 40, total: 800 };
+export const LIMITES = { chat: 20, investigar: 6, ip: 40, total: 800, modelosCombinados: 3 };
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const finDelDia = () => { const d = new Date(); d.setUTCHours(24, 0, 0, 0); return d.getTime(); };
@@ -52,21 +52,22 @@ export async function uso(env, usuario) {
 }
 
 /** Cuenta una petición; lanza 429 con un mensaje claro si se pasa de algún límite. */
-export async function consumir(env, request, usuario, modo) {
+/** peso: cuántos usos cuenta (combinar varios modelos cuesta uno por modelo). */
+export async function consumir(env, request, usuario, modo, peso = 1) {
   const d = hoy();
   const tipo = modo === 'investigar' ? 'investigar' : 'chat';
   const ip = request.headers.get('CF-Connecting-IP') || 'sin-ip';
   const claves = [[`u:${usuario}:${tipo}:${d}`, LIMITES[tipo]], [`ip:${ip}:${d}`, LIMITES.ip], [`total:${d}`, LIMITES.total]];
   for (const [clave, limite] of claves) {
-    if ((await contador(env, clave)) >= limite) {
-      const msg = clave.startsWith('total')
+    if ((await contador(env, clave)) + peso > limite) {
+      const msg = peso > 1 && !clave.startsWith('total') ? `No te quedan usos suficientes para combinar ${peso} modelos hoy. Prueba con menos modelos o con uno solo.` : clave.startsWith('total')
         ? 'La versión de prueba llegó a su límite de hoy. Vuelve mañana o crea tu propio lab.ia gratis: https://labia-ciencia.pages.dev'
         : `Llegaste al límite de la versión de prueba (${limite} ${tipo === 'investigar' ? 'investigaciones' : 'mensajes'} al día). Crea tu propio lab.ia gratis, sin límites de prueba: https://labia-ciencia.pages.dev`;
       throw Object.assign(new Error(msg), { estado: 429 });
     }
   }
   const expira = finDelDia();
-  await env.DB.batch(claves.map(([clave]) => env.DB.prepare('INSERT INTO cuotas (clave, n, expira) VALUES (?, 1, ?) ON CONFLICT(clave) DO UPDATE SET n = n + 1').bind(clave, expira)));
+  await env.DB.batch(claves.map(([clave]) => env.DB.prepare('INSERT INTO cuotas (clave, n, expira) VALUES (?, ?, ?) ON CONFLICT(clave) DO UPDATE SET n = n + ?').bind(clave, peso, expira, peso)));
 }
 
 // Lo que la demo no permite: cuentas, claves, configuración, crear skills, imágenes y la API.

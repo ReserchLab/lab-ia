@@ -9,7 +9,8 @@
   // ── Preferencias del dispositivo ─────────────────────────────────────────
   const PREF = 'cardon-lab:prefs';
   const prefs = Object.assign(
-    { modo: 'chat', skill: 'asistente-general', modeloTexto: 'auto', modeloImagen: 'auto', tamano: 'cuadrado', fuentes: null, razonamiento: true },
+    { modo: 'chat', skill: 'asistente-general', modeloTexto: 'auto', modeloImagen: 'auto', tamano: 'cuadrado', fuentes: null, razonamiento: true,
+      combinar: { activa: false, modelos: [], integrador: 'auto', mostrar: true } },
     leerPrefs(),
   );
   function leerPrefs() { try { return JSON.parse(localStorage.getItem(PREF)) || {}; } catch { return {}; } }
@@ -230,6 +231,102 @@
       else if (t && t.modelo !== 'auto') etiqueta = `${t.nombre} · ${nombreModelo(t.modelo)}`;
     }
     $('#chip-modelo span').textContent = etiqueta;
+    const c = prefs.combinar;
+    const combinando = modo !== 'imagen' && c?.activa && c.modelos.length >= 2;
+    $('#chip-combinar').hidden = modo === 'imagen';
+    $('#chip-combinar').classList.toggle('activo', Boolean(combinando));
+    $('#chip-combinar span').textContent = combinando ? `${c.modelos.length} modelos${c.mostrar ? ' · por separado' : ''}` : 'Combinar';
+    $('#chip-modelo').hidden = Boolean(combinando);
+  }
+
+  // ── Recomendación según lo que se escribe ────────────────────────────────
+  let ultimaRecomendacion = null;
+  let relojRecomendacion = null;
+  function programarRecomendacion() {
+    clearTimeout(relojRecomendacion);
+    const t = $('#texto').value.trim();
+    if (t.length < 12 || prefs.modo === 'imagen') { $('#recomendacion').hidden = true; return; }
+    relojRecomendacion = setTimeout(async () => {
+      try {
+        const rec = await api('/api/recomendar', { metodo: 'POST', cuerpo: { texto: t, modo: prefs.modo, skill: prefs.skill } });
+        ultimaRecomendacion = rec;
+        pintarRecomendacion();
+      } catch { /* sin recomendación */ }
+    }, 700);
+  }
+
+  function pintarRecomendacion() {
+    const rec = ultimaRecomendacion;
+    const caja = $('#recomendacion');
+    if (!rec?.modelos?.length || !$('#texto').value.trim()) { caja.hidden = true; return; }
+    const corto = id => nombreModelo(id).replace(/ · .*$/, '').replace(/^.*\//, '').slice(0, 28);
+    const elegido = prefs.modeloTexto;
+    caja.innerHTML = `<span class="rec-tema" title="${esc(rec.motivo)}">${esc(rec.icono || '◈')} ${esc(rec.nombreTarea || rec.tarea)}</span>
+      <span class="rec-motivo">${esc(rec.motivo)}</span>
+      ${rec.modelos.slice(0, 3).map(m => `<button class="chip rec-modelo${m.id === elegido ? ' activo' : ''}" data-rec="${esc(m.id)}" title="${esc(m.nombre)}">${esc(corto(m.id))}</button>`).join('')}
+      ${rec.combinacion?.length >= 2 ? `<button class="chip rec-combinar" data-rec-combinar>⧉ Combinar ${rec.combinacion.length}</button>` : ''}
+      <button class="chip rec-cerrar" data-rec-cerrar aria-label="Cerrar">✕</button>`;
+    caja.hidden = false;
+  }
+
+  $('#recomendacion').addEventListener('click', e => {
+    const m = e.target.closest('[data-rec]');
+    if (m) {
+      // Un modelo concreto: se usa en el próximo envío (y se apaga la combinación).
+      prefs.modeloTexto = prefs.modeloTexto === m.dataset.rec ? 'auto' : m.dataset.rec;
+      prefs.combinar.activa = false;
+      guardarPrefs(); pintarChips(); pintarRecomendacion();
+      return;
+    }
+    if (e.target.closest('[data-rec-combinar]')) {
+      prefs.combinar = { ...prefs.combinar, activa: true, modelos: ultimaRecomendacion.combinacion.slice(0, 4) };
+      guardarPrefs(); pintarChips();
+      aviso(`Combinando ${prefs.combinar.modelos.length} modelos`);
+      return;
+    }
+    if (e.target.closest('[data-rec-cerrar]')) $('#recomendacion').hidden = true;
+  });
+
+  async function hojaCombinar() {
+    if (!est.modelos.texto.length) await cargarModelos();
+    const c = prefs.combinar;
+    const elegidos = new Set(c.modelos);
+    const sugeridos = ultimaRecomendacion?.modelos?.map(m => m.id) || [];
+    const lista = [...new Set([...c.modelos, ...sugeridos, ...est.modelos.texto.map(m => m.id)])].filter(id => id !== 'auto');
+    const fila = id => `<label class="casilla"><input type="checkbox" value="${esc(id)}"${elegidos.has(id) ? ' checked' : ''}><span>${esc(nombreModelo(id))}${sugeridos.includes(id) ? ' <small style="color:var(--rojo);display:inline">· recomendado</small>' : ''}<small>${esc(id)}</small></span></label>`;
+    abrirHoja('Combinar modelos', `
+      <p class="tenue" style="font-size:13px;margin:0 0 8px">Elige de 2 a 4 modelos: responden a la vez y un integrador une lo mejor de cada uno en una sola respuesta. ${ultimaRecomendacion ? `Para lo que escribes (${esc(ultimaRecomendacion.nombreTarea)}) se recomiendan modelos de familias distintas.` : ''}</p>
+      <label class="casilla"><input type="checkbox" id="cb-mostrar"${c.mostrar ? ' checked' : ''}><span>Mostrar también la respuesta de cada modelo<small>En pestañas, encima de la respuesta integrada.</small></span></label>
+      <label class="campo"><span>Integrador</span><select id="cb-integrador">
+        <option value="auto"${c.integrador === 'auto' ? ' selected' : ''}>El de la tarea Razonamiento (recomendado)</option>
+        ${est.modelos.texto.filter(m => m.id !== 'auto').map(m => `<option value="${esc(m.id)}"${c.integrador === m.id ? ' selected' : ''}>${esc(m.nombre)}</option>`).join('')}
+      </select></label>
+      <input class="buscar" id="cb-filtro" type="search" placeholder="Buscar modelo">
+      <div id="cb-lista">${lista.slice(0, 60).map(fila).join('')}</div>
+      <p id="cb-cuenta" class="tenue" style="font: 12px var(--mono)"></p>
+      <div class="fila-botones"><button class="btn primario" data-op="activar">Combinar</button><button class="btn" data-op="desactivar">Un solo modelo</button></div>`, cuerpo => {
+      const contar = () => {
+        const n = cuerpo.querySelectorAll('#cb-lista input:checked').length;
+        cuerpo.querySelector('#cb-cuenta').textContent = n < 2 ? 'Elige al menos 2 modelos.' : n > 4 ? 'Máximo 4 modelos.' : `${n} modelos seleccionados.`;
+      };
+      contar();
+      cuerpo.addEventListener('change', e => { if (e.target.closest('#cb-lista')) { if (e.target.checked) elegidos.add(e.target.value); else elegidos.delete(e.target.value); contar(); } });
+      cuerpo.querySelector('#cb-filtro').addEventListener('input', e => {
+        const f = e.target.value.toLowerCase();
+        cuerpo.querySelector('#cb-lista').innerHTML = lista.filter(id => (id + nombreModelo(id)).toLowerCase().includes(f)).slice(0, 60).map(fila).join('');
+      });
+      cuerpo.addEventListener('click', e => {
+        const op = e.target.closest('[data-op]')?.dataset.op;
+        if (op === 'desactivar') { prefs.combinar.activa = false; guardarPrefs(); pintarChips(); cerrarHoja(); }
+        if (op === 'activar') {
+          const modelos = [...elegidos].slice(0, 4);
+          if (modelos.length < 2) { aviso('Elige al menos 2 modelos'); return; }
+          prefs.combinar = { activa: true, modelos, integrador: cuerpo.querySelector('#cb-integrador').value, mostrar: cuerpo.querySelector('#cb-mostrar').checked };
+          guardarPrefs(); pintarChips(); cerrarHoja();
+          aviso(`Combinando ${modelos.length} modelos`);
+        }
+      });
+    }, true);
   }
 
   document.querySelectorAll('.modo').forEach(b => b.addEventListener('click', () => ponerModo(b.dataset.modo)));
@@ -359,6 +456,14 @@
     if (img) { abrirVisor(img.src); return; }
     const acc = e.target.closest('[data-acc]');
     if (acc) accionMensaje(acc.dataset.acc, acc.closest('.msg'));
+    const pe = e.target.closest('[data-pestana]');
+    if (pe) {
+      const div = pe.closest('.msg');
+      div.querySelector('.combinacion').dataset.sel = pe.dataset.pestana;
+      const m = est.mensajes.find(x => x.id === div.dataset.id) || est.mensajes[est.mensajes.length - 1];
+      pintarCombinacion(div, m);
+      return;
+    }
     const vf = e.target.closest('[data-verif]');
     if (vf) verificarDeNuevo(vf.closest('.msg'), vf.dataset.verif);
   });
@@ -393,11 +498,12 @@
     const meta = m.meta || {};
     const sk = est.skills.find(s => s.id === meta.skill);
     div.innerHTML = `
-      <div class="etiqueta-msg"><span class="punto"></span>${esc(sk ? sk.nombre : 'lab.ia')}${meta.modo && meta.modo !== 'chat' ? ' · ' + MODOS[meta.modo] : ''}</div>
+      <div class="etiqueta-msg"><span class="punto"></span>${esc(sk ? sk.nombre : 'lab.ia')}${meta.modo && meta.modo !== 'chat' ? ' · ' + MODOS[meta.modo] : ''}${meta.combinacion ? ` · ⧉ ${meta.combinacion.respuestas.length} modelos integrados` : ''}</div>
       <div class="estado" hidden><span class="matriz">${'<i></i>'.repeat(9)}</span><span class="estado-texto"></span></div>
       <details class="razon" hidden><summary>Razonamiento</summary><div class="razon-texto"></div></details>
       <details class="fuentes" hidden><summary>Fuentes</summary><div class="consultas"></div><div class="lista-fuentes"></div><div class="fallos"></div></details>
       <details class="verif" hidden><summary>Verificación</summary><div class="verif-cuerpo"></div></details>
+      <details class="combinacion" hidden><summary></summary><div class="pestanas"></div><div class="panel-modelo md"></div></details>
       <div class="imagenes"></div>
       <div class="cuerpo md"></div>
       <div class="acciones-msg" hidden></div>`;
@@ -437,6 +543,7 @@
       f.querySelector('.fallos').textContent = meta.fallos?.length ? `Sin respuesta: ${meta.fallos.join(' · ')}` : '';
     }
     if (meta.verificacion && m.id) pintarVerificacion(div, m);
+    if (meta.combinacion) pintarCombinacion(div, m);
     if (meta.imagenes?.length) {
       div.querySelector('.imagenes').innerHTML = meta.imagenes.map(u => `<div class="imagen-gen"><img src="${esc(u)}" alt="${esc(meta.prompt || 'Imagen generada')}" loading="lazy"></div>`).join('')
         + (meta.prompt ? `<div class="prompt-usado">${esc(meta.prompt)}</div>` : '');
@@ -455,6 +562,25 @@
         ${esUltimo ? '<button data-acc="regenerar">regenerar</button>' : ''}
         ${meta.modelo ? `<span class="modelo-usado" title="${esc(meta.modelo)}">${esc(meta.modelo)}</span>` : ''}`;
     }
+  }
+
+  // Respuestas de cada modelo en pestañas (la integrada va en el cuerpo del mensaje).
+  function pintarCombinacion(div, m) {
+    const c = m.meta.combinacion;
+    const d = div.querySelector('.combinacion');
+    d.hidden = false;
+    const etq = div.querySelector('.etiqueta-msg');
+    if (etq && !etq.textContent.includes('⧉')) etq.append(` · ⧉ ${c.respuestas.length} modelos integrados`);
+    if (d.dataset.inicial !== '1') { d.open = c.mostrar !== false; d.dataset.inicial = '1'; }
+    const sel = Math.min(Number(d.dataset.sel || 0), c.respuestas.length - 1);
+    const corto = id => String(id || '').replace(/^.*\//, '').replace(/:free$/, '').slice(0, 26);
+    const ok = c.respuestas.filter(r => r.texto && !r.error).length;
+    d.querySelector('summary').textContent = `⧉ Respuestas por modelo · ${ok}/${c.respuestas.length}${c.integrador ? ` · integradas por ${corto(c.integrador)}` : ''}`;
+    d.querySelector('.pestanas').innerHTML = c.respuestas.map((r, i) => `<button class="pestana${i === sel ? ' activa' : ''}" data-pestana="${i}"><span class="pt ${r.error ? 'mal' : r.escribiendo ? 'esc' : 'ok'}"></span>${esc(corto(r.modelo))}</button>`).join('');
+    const r = c.respuestas[sel];
+    d.querySelector('.panel-modelo').innerHTML = r.error && !r.texto
+      ? `<p class="mal">${esc(r.error)}</p>`
+      : window.renderMd(r.texto || '…', m.meta.fuentes) + (r.error ? `<p class="mal">${esc(r.error)}</p>` : '');
   }
 
   const VEREDICTO = { respaldada: ['ok', '✓ respaldada'], parcial: ['medio', '! parcial'], no_respaldada: ['mal', '✗ no respaldada'], sin_cita: ['mal', '✗ sin cita'] };
@@ -532,7 +658,7 @@
   // ── Enviar y recibir (SSE sobre fetch) ───────────────────────────────────
   const texto = $('#texto');
   function ajustarAltura() { texto.style.height = 'auto'; texto.style.height = Math.min(texto.scrollHeight, window.innerHeight * 0.4) + 'px'; }
-  texto.addEventListener('input', ajustarAltura);
+  texto.addEventListener('input', () => { ajustarAltura(); programarRecomendacion(); });
   texto.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 900px)').matches) { e.preventDefault(); enviar(); }
   });
@@ -563,6 +689,7 @@
       cont.appendChild(nodoMensaje(mu));
       texto.value = '';
       ajustarAltura();
+      $('#recomendacion').hidden = true;
     }
 
     const ma = { rol: 'assistant', contenido: '', meta: { modo: prefs.modo, skill: prefs.skill } };
@@ -596,6 +723,8 @@
         body: JSON.stringify({
           conversacion: est.conv, texto: contenido, regenerar, modo: prefs.modo, skill: prefs.skill,
           modelo: prefs.modeloTexto, modeloImagen: prefs.modeloImagen, tamano: prefs.tamano,
+          combinar: prefs.modo !== 'imagen' && prefs.combinar?.activa && prefs.combinar.modelos.length >= 2
+            ? { modelos: prefs.combinar.modelos, integrador: prefs.combinar.integrador, mostrar: prefs.combinar.mostrar } : undefined,
           fuentes: prefs.modo === 'investigar' ? fuentesActivas() : undefined,
           leer: prefs.modo === 'investigar' && prefs.leer != null ? prefs.leer : undefined,
           verificacion: prefs.modo === 'investigar' && prefs.verificacion ? prefs.verificacion : undefined,
@@ -641,6 +770,15 @@
             ma.id = d.id;
             Object.assign(ma.meta, d);
             nodo.dataset.id = d.id;
+          } else if (ev === 'combinacion') {
+            ma.meta.combinacion = { respuestas: d.modelos.map(m => ({ modelo: m, texto: '', escribiendo: true })), mostrar: d.mostrar };
+            repintar();
+          } else if (ev === 'parcial') {
+            const rr = ma.meta.combinacion?.respuestas[d.i];
+            if (rr) { rr.texto += d.t; repintar(); }
+          } else if (ev === 'parcial_fin') {
+            const rr = ma.meta.combinacion?.respuestas[d.i];
+            if (rr) { rr.escribiendo = false; rr.modelo = d.modelo; if (d.error) rr.error = d.error; repintar(); }
           } else if (ev === 'verificar') {
             verificarLuego = d;
           } else if (ev === 'verificacion') {
@@ -1257,6 +1395,7 @@ curl ${esc(base)}/chat/completions \
       ajustes: () => { cerrarLateral(); hojaAjustes(); },
       fuentes: hojaFuentes,
       tamano: hojaTamano,
+      combinar: hojaCombinar,
       modelo: hojaModelo,
     })[a]?.();
   });

@@ -228,6 +228,21 @@ details.verif { border: 1px solid var(--linea); border-radius: 14px; margin: 0 0
 .chips::-webkit-scrollbar { display: none; }
 .chip { flex: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--linea); font: 12px var(--mono); color: var(--tenue); white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
 .chip:hover { color: var(--texto); border-color: var(--linea2); }
+.chip.activo { color: var(--texto); border-color: var(--rojo); background: var(--rojo-suave); }
+.recomendacion { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--linea2); border-radius: 16px; font-size: 12.5px; animation: entrar .2s; }
+.rec-tema { font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--rojo); }
+.rec-motivo { color: var(--tenue); flex-basis: 100%; order: 1; font-size: 12px; }
+.recomendacion .chip { order: 2; }
+.rec-combinar { color: var(--texto); border-color: var(--rojo); }
+.rec-cerrar { margin-left: auto; padding: 6px 10px; }
+details.combinacion { border: 1px solid var(--linea); border-radius: 14px; margin: 0 0 12px; background: var(--fondo); }
+.pestanas { display: flex; gap: 4px; padding: 0 10px 8px; overflow-x: auto; scrollbar-width: none; }
+.pestanas::-webkit-scrollbar { display: none; }
+.pestana { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--linea); font: 12px var(--mono); color: var(--tenue); }
+.pestana.activa { color: var(--texto); border-color: var(--linea2); background: var(--sup2); }
+.pestana .pt { width: 7px; height: 7px; border-radius: 50%; background: var(--apagado); }
+.pestana .pt.ok { background: var(--verde); } .pestana .pt.mal { background: var(--rojo); } .pestana .pt.esc { background: var(--texto); animation: latir 1s infinite; }
+.panel-modelo { padding: 4px 14px 14px; max-height: 50dvh; overflow-y: auto; font-size: 14.5px; border-top: 1px dashed var(--linea); }
 
 /* ── Hoja inferior ──────────────────────────────────────── */
 .hoja-velo { position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 40; backdrop-filter: blur(3px); animation: aparecer .2s; }

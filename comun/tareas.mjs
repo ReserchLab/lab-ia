@@ -53,3 +53,53 @@ export function tareaDe(skill, modo) {
   if (skill?.categoria === 'Código') return 'codigo';
   return 'chat';
 }
+
+// ── Recomendación según lo que se pregunta ─────────────────────────────────
+// Temas detectados por palabras clave (español e inglés). Cada tema elige la tarea cuyos modelos
+// encajan mejor y explica el motivo; la skill y el modo pesan, pero el texto manda.
+const TEMAS = [
+  { id: 'codigo', tarea: 'codigo', motivo: 'Es código o análisis de datos', re: /```|\b(python|javascript|typescript|bash|sql|código|codigo|script|traceback|stack trace|pandas|numpy|scanpy|seurat|bioconductor|ggplot|nextflow|snakemake|docker|regex|bug|compila|programa en|en R|jupyter|notebook)\b/i },
+  { id: 'matematicas', tarea: 'razonamiento', motivo: 'Necesita cálculo o razonamiento paso a paso', re: /\b(demuestra|demostración|ecuaci|integral|derivad|matriz|probabilidad|estadístic|estadistic|p-valor|p valor|anova|regresi|bayes|tamaño de muestra|potencia estadística|calcula|resuelve|teorema|optimiza|lógica)\b|[=∑∫√≤≥±]/i },
+  { id: 'biomedicina', tarea: 'investigar', motivo: 'Tema biomédico: conviene contexto largo para leer estudios', re: /\b(paciente|enfermedad|tratamiento|fármaco|farmaco|medicamento|mecanismo de acción|mecanismo de accion|farmacolog\w*|dosis|ensayo clínico|ensayo clinico|cáncer|cancer|diabetes|tumor\w*|síntoma\w*|sintoma\w*|terapia|vacuna\w*|clínic\w*|clinic\w*|metaanálisis|metaanalisis|cohorte|mortalidad|insulina|hígado|higado|riñón|rinon|corazón|cerebr\w*|sangre|hormona\w*|inflamaci\w*|infecci\w*|virus|bacteria\w*|antibiótic\w*|fisiolog\w*|patolog\w*|nutrici\w*|dieta|obesidad|hipertensi\w*|alzheimer|parkinson|metformina|aspirina|fda)\b/i },
+  { id: 'biologia', tarea: 'investigar', motivo: 'Biología molecular y celular: fuentes especializadas y contexto largo', re: /\b(gen|genes|proteína\w*|proteina\w*|crispr|arn|adn|rna|dna|célula\w*|celula\w*|mitocondri\w*|enzima\w*|receptor\w*|expresión génica|secuenciación|secuenciacion|mutaci\w*|genoma\w*|single-cell|scrna|epigen\w*|metabol\w*|ribosoma\w*|fotosíntesis|fotosintesis|evoluci\w*|especie\w*|ecosistema\w*|microbio\w*)\b/i },
+  { id: 'quimica', tarea: 'razonamiento', motivo: 'Química: estructura y mecanismo, razonamiento cuidadoso', re: /\b(molécula|molecula|reacción|reaccion|síntesis|sintesis|smiles|enlace|ph|pka|estequiometr|orgánica|organica|catalizador|ic50|ki\b)/i },
+  { id: 'revision', tarea: 'razonamiento', motivo: 'Revisión crítica de un texto: razonamiento y precisión', re: /\b(revisa|revisión del|critica|evalúa este|evalua este|abstract|manuscrito|paper|artículo adjunto|peer review)\b/i },
+  { id: 'redaccion', tarea: 'chat', motivo: 'Redacción o traducción: fluidez y estilo', re: /\b(redacta|escribe|traduce|traducción|resume|resumen de|corrige|mejora el texto|carta|correo|ensayo)\b/i },
+];
+
+/** Familia del modelo (para combinar modelos distintos entre sí, no variantes del mismo). */
+export function familia(id) {
+  const n = id.toLowerCase();
+  const fams = ['nemotron', 'qwen', 'llama', 'gemma', 'gpt-oss', 'glm', 'mistral', 'deepseek', 'poolside', 'dots', 'kimi', 'granite', 'agnes', 'command', 'gemini', 'phi', 'codestral', 'north', 'sea-lion', 'openai'];
+  return fams.find(f => n.includes(f)) || n.split('/').slice(-1)[0].split(/[-:._]/)[0];
+}
+
+export function clasificar(texto = '', { skill, modo } = {}) {
+  const t = String(texto);
+  if (t.length > 6000) return { tema: 'largo', tarea: 'investigar', motivo: 'Texto largo: hace falta un modelo con mucho contexto' };
+  const tema = TEMAS.find(x => x.re.test(t));
+  if (tema) return { tema: tema.id, tarea: tema.tarea, motivo: tema.motivo };
+  if (skill?.tarea) return { tema: 'skill', tarea: skill.tarea, motivo: `Lo que mejor encaja con la skill ${skill.nombre}` };
+  if (modo === 'investigar') return { tema: 'investigar', tarea: 'investigar', motivo: 'Investigación con fuentes: contexto largo' };
+  return { tema: 'general', tarea: 'chat', motivo: 'Conversación general' };
+}
+
+/**
+ * Modelos recomendados para un texto concreto. `combinacion`: los mejores de familias distintas,
+ * para que al combinar respuestas cada modelo aporte una perspectiva diferente.
+ */
+export function recomendarPara(lista, texto, opciones = {}, n = 6) {
+  const c = clasificar(texto, opciones);
+  const candidatos = recomendados(lista, c.tarea, 20);
+  const modelos = candidatos.slice(0, n);
+  const combinacion = [];
+  const vistas = new Set();
+  for (const m of candidatos) {
+    const f = familia(m.id);
+    if (vistas.has(f)) continue;
+    vistas.add(f);
+    combinacion.push(m.id);
+    if (combinacion.length === 3) break;
+  }
+  return { ...c, modelos, combinacion };
+}

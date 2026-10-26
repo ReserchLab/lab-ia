@@ -7,7 +7,7 @@
 //   guardarImagen(datos, tipo) → URL pública de la imagen
 import { catalogo, scholar } from './fuentes.mjs';
 import { citasDe, leerPagina, verificar } from './verificacion.mjs';
-import { TAREAS, recomendados, tareaDe } from './tareas.mjs';
+import { TAREAS, recomendados, recomendarPara, tareaDe } from './tareas.mjs';
 import { publica } from './skills.mjs';
 
 export const TAMANOS = { cuadrado: [1024, 1024], vertical: [768, 1344], horizontal: [1344, 768] };
@@ -23,6 +23,16 @@ export const SISTEMA_BASE = `Eres lab.ia, un asistente de investigación y creac
 const REGLAS_FUENTES = `Tienes resultados de búsqueda numerados. Básate en ellos y cita cada afirmación con [n] usando sus números.
 Distingue evidencia sólida (revisiones, ensayos, metaanálisis) de preliminar (preprints, estudios pequeños, in vitro).
 Si las fuentes no responden la pregunta, dilo y sugiere cómo buscar mejor. No inventes fuentes ni números de cita.`;
+
+const INTEGRAR = `## Integración de respuestas
+Recibes, al final del último mensaje, las respuestas de varios modelos distintos a esta misma pregunta.
+Escribe UNA respuesta final mejor que cualquiera de ellas por separado:
+- Combina lo correcto y lo complementario de cada una; corrige errores y elimina repeticiones.
+- Si discrepan en algo importante, dilo explícitamente («Los modelos discrepan en…») y explica qué sostiene la evidencia o el razonamiento más sólido.
+- Las respuestas se llaman A, B, C…: no son fuentes. Nunca las cites ni escribas «[1]», «[A]» o «según la respuesta B».
+- Si hay «Resultados de búsqueda» numerados, conserva las citas [n] a esas fuentes. Si no los hay, no pongas ninguna cita entre corchetes.
+- Mantén el formato pedido por la skill y responde en el idioma del usuario.
+- Termina con una línea breve en cursiva: _Integrado a partir de N modelos_ (N = cuántas respuestas recibiste).`;
 
 const FUENTES_POR_DEFECTO = ['web', 'semanticscholar', 'openalex', 'europepmc', 'wikipedia'];
 
@@ -153,6 +163,62 @@ export function crearNucleo({ gateway, almacen, skills, tareas, guardarImagen, p
     };
   }
 
+  // ── Combinación de modelos ───────────────────────────────────────────────
+  /**
+   * Varios modelos responden a la vez (eventos «parcial») y un integrador une lo mejor de cada uno
+   * en la respuesta final (eventos «texto», como una respuesta normal).
+   */
+  async function combinarRespuestas(mensajes, modelos, ajustes, opciones, emitir, señal) {
+    emitir('combinacion', { modelos, mostrar: ajustes.mostrar !== false });
+    emitir('estado', { texto: `Consultando ${modelos.length} modelos a la vez…` });
+    const textos = modelos.map(() => '');
+    const respuestas = await Promise.all(modelos.map(async (m, i) => {
+      try {
+        const usado = await gateway.conversar(mensajes, { modelo: m, señal, alTexto: t => { textos[i] += t; emitir('parcial', { i, t }); } });
+        emitir('parcial_fin', { i, modelo: usado });
+        return { modelo: usado, texto: textos[i] };
+      } catch (e) {
+        const error = explicarError(e);
+        emitir('parcial_fin', { i, modelo: m, error });
+        return { modelo: m, texto: textos[i], error };
+      }
+    }));
+    const validas = respuestas.filter(r => r.texto.trim());
+    if (señal?.aborted) throw new Error('aborted');
+    if (!validas.length) throw new Error(`Ninguno de los modelos respondió (${respuestas.map(r => r.error).filter(Boolean).join(' · ')})`);
+    let usado;
+    if (validas.length === 1) {
+      // Solo uno respondió: se usa tal cual, sin integrar.
+      opciones.alTexto(validas[0].texto);
+      usado = validas[0].modelo;
+    } else {
+      const integrador = ajustes.integrador && ajustes.integrador !== 'auto' ? ajustes.integrador : await modeloTarea('razonamiento');
+      emitir('estado', { texto: `Integrando ${validas.length} respuestas${integrador !== 'auto' ? ` con ${integrador}` : ''}…` });
+      const borradores = validas.map((r, k) => `### Respuesta ${String.fromCharCode(65 + k)}\n${r.texto.slice(0, 12_000)}`).join('\n\n');
+      const mensajesInt = mensajes.map(m => ({ ...m }));
+      mensajesInt[0].content += `\n\n${INTEGRAR}`;
+      const ultimo = mensajesInt[mensajesInt.length - 1];
+      ultimo.content += `\n\n---\nRespuestas de ${validas.length} modelos a esta misma pregunta:\n\n${borradores}`;
+      try {
+        usado = await gateway.conversar(mensajesInt, { ...opciones, modelo: integrador });
+      } catch (e) {
+        if (integrador === 'auto' || señal?.aborted) throw e;
+        emitir('estado', { texto: `El integrador no respondió (${explicarError(e)}). Integrando con automático…` });
+        usado = await gateway.conversar(mensajesInt, { ...opciones, modelo: 'auto' });
+      }
+    }
+    return { usado, combinacion: { respuestas: respuestas.map(r => ({ ...r, texto: r.texto.slice(0, 20_000) })), integrador: usado, mostrar: ajustes.mostrar !== false } };
+  }
+
+  /** Modelos recomendados para lo que el usuario está escribiendo. */
+  async function recomendarModelos({ texto, modo, skill: idSkill }) {
+    const skill = idSkill ? await skills.obtener(idSkill) : null;
+    const lista = (await gateway.modelosTexto()).filter(m => m.id !== 'auto');
+    const r = recomendarPara(lista, texto, { skill, modo });
+    const tarea = TAREAS.find(t => t.id === r.tarea);
+    return { ...r, nombreTarea: tarea?.nombre, icono: tarea?.icono, modeloTarea: await modeloTarea(r.tarea) };
+  }
+
   // ── Chat ─────────────────────────────────────────────────────────────────
   /** Valida la petición y crea o actualiza la conversación. Devuelve null si no hay mensaje. */
   async function prepararChat(p) {
@@ -232,7 +298,6 @@ export function crearNucleo({ gateway, almacen, skills, tareas, guardarImagen, p
       }
       depurar?.(mensajes);
 
-      emitir('estado', { texto: modelo === 'auto' ? 'Pensando…' : `Pensando con ${modelo}…` });
       let respuesta = '';
       let razonamiento = '';
       const opciones = {
@@ -241,7 +306,12 @@ export function crearNucleo({ gateway, almacen, skills, tareas, guardarImagen, p
         alRazonamiento: t => { razonamiento += t; emitir('razonamiento', { t }); },
       };
       let usado;
-      try {
+      let combinacion = null;
+      const variosModelos = Array.isArray(p.combinar?.modelos) ? [...new Set(p.combinar.modelos.filter(Boolean))].slice(0, 4) : [];
+      if (variosModelos.length >= 2) {
+        ({ usado, combinacion } = await combinarRespuestas(mensajes, variosModelos, p.combinar, opciones, emitir, señal));
+      } else try {
+        emitir('estado', { texto: modelo === 'auto' ? 'Pensando…' : `Pensando con ${modelo}…` });
         usado = await gateway.conversar(mensajes, { ...opciones, modelo });
       } catch (e) {
         // Si el modelo elegido falla antes de escribir nada, se reintenta con el router automático.
@@ -255,6 +325,7 @@ export function crearNucleo({ gateway, almacen, skills, tareas, guardarImagen, p
         memoria: { resumidos: ctx.resumidos, literales: ctx.literales },
         ...(fuentes.length ? { fuentes: fuentes.map(({ texto: _t, ...f }) => f) } : {}), ...(fallos.length ? { fallos } : {}),
         ...(consultas.length ? { consultas } : {}), ...(razonamiento ? { razonamiento } : {}),
+        ...(combinacion ? { combinacion } : {}),
       };
       const id = await almacen.agregar(conv, 'assistant', respuesta, meta);
       emitir('fin', { id, ...meta });
@@ -349,6 +420,6 @@ Usa modo "investigar" si la skill necesita evidencia publicada; "imagen" si gene
 
   return {
     FUENTES, TAREAS, explicarError, metaDe, publica,
-    prepararChat, chat, generarSkill, listarTareas, recomendarTareas, probarModelo, verificarMensaje, revisarMensaje,
+    prepararChat, chat, generarSkill, recomendarModelos, listarTareas, recomendarTareas, probarModelo, verificarMensaje, revisarMensaje,
   };
 }

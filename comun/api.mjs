@@ -29,6 +29,8 @@ export async function rutasComunes(nucleo, { almacen, skills, tareas }, pet) {
   if (ruta === '/api/tareas/recomendar' && metodo === 'POST') return ok(await nucleo.recomendarTareas());
   if (ruta === '/api/tareas/probar' && metodo === 'POST') return ok(await nucleo.probarModelo(await pet.cuerpo()));
 
+  if (ruta === '/api/recomendar' && metodo === 'POST') return ok(await nucleo.recomendarModelos(await pet.cuerpo()));
+
   if (ruta === '/api/fuentes' && metodo === 'GET') return ok(nucleo.FUENTES.map(({ id, nombre, area }) => ({ id, nombre, area })));
 
   if (ruta === '/api/skills' && metodo === 'GET') return ok((await skills.todas()).map(nucleo.publica));
