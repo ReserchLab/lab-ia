@@ -95,11 +95,15 @@ node herramientas/importar-skills.mjs servidor/skills /ruta/a/una-skill --modo i
 
 Si lab.ia te sirve: dale una **★ estrella** en GitHub y compártelo.
 
-Donación en **USDC (red Arbitrum, mínimo 5)**:
+Donaciones en cripto:
 
-```
-0xAC43f9b0E7F0ae6386cfC8ef6BFf62CE9c3006A1
-```
+| | Dirección |
+|---|---|
+| **Bitcoin (BTC)** | `bc1qd9j45f4t0jwyhjhqh2kvz2cr7k8xye460rr2y7` |
+| **Monero (XMR)** | `447gTj6Hg6gaAEAUmjqfhqDZr1PziUTvbT4LYLpmLVnTNVFK6cqeqPfh6P4neMKLWX5jDXAr94fWHacJwDvjmCzBBH8wPBt` |
+| **USDC** (red Arbitrum, mínimo 5) | `0xAC43f9b0E7F0ae6386cfC8ef6BFf62CE9c3006A1` |
+
+Con código QR y botón para abrir tu billetera en [la página del proyecto](https://labia-ciencia.pages.dev/#apoyar).
 
 ¡Gracias!<br>
 <sub>Hecho xhumanx + IA</sub>
