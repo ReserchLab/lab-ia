@@ -107,6 +107,9 @@ export class Proveedores {
   async agregar(plataforma, clave) {
     // lab.ia usa la clave de Pollinations directamente para las imágenes (FLUX real, sin marca de agua).
     if (plataforma === 'pollinations') guardarEnConfig('POLLINATIONS_API_KEY', clave);
+    // Google también sirve para las imágenes Nano Banana (de pago, opcional).
+    if (plataforma === 'google') guardarEnConfig('GOOGLE_API_KEY', clave);
+    if (plataforma === 'openai') guardarEnConfig('OPENAI_API_KEY', clave);
     const r = await this.tablero('/api/keys', 'POST', { platform: plataforma, key: clave });
     let estado = 'desconocido';
     let detalle = '';

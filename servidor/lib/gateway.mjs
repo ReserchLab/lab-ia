@@ -1,6 +1,7 @@
 // Cliente de FreeLLMAPI. La URL y la clave salen de la configuración de `ia`
 // (/root/.config/ia/config) o de FREELLMAPI_URL / FREELLMAPI_API_KEY.
 import { existsSync, readFileSync } from 'node:fs';
+import { esDePago, generarDePago, modelosDePago } from '../../comun/imagenes-pago.mjs';
 
 function leerConfigIa() {
   const archivo = '/root/.config/ia/config';
@@ -27,6 +28,9 @@ export class Gateway {
       cfCuenta: process.env.CLOUDFLARE_ACCOUNT_ID || ia.CLOUDFLARE_ACCOUNT_ID || '',
       cfToken: process.env.CLOUDFLARE_API_TOKEN || ia.CLOUDFLARE_API_TOKEN || '',
       pollinations: process.env.POLLINATIONS_API_KEY || ia.POLLINATIONS_API_KEY || '',
+      // De pago, opcionales: Nano Banana (Google AI Studio) y GPT Image (OpenAI).
+      google: process.env.GOOGLE_API_KEY || ia.GOOGLE_API_KEY || '',
+      openai: process.env.OPENAI_API_KEY || ia.OPENAI_API_KEY || '',
     };
   }
 
@@ -75,6 +79,7 @@ export class Gateway {
       } catch { /* sin sesión del dashboard solo se listan los modelos sin clave */ }
     }
     for (const p of POLLINATIONS) lista.push({ id: `pollinations/${p}`, nombre: `Pollinations ${p} (sin clave)` });
+    lista.push(...modelosDePago(this.cfg));
     return lista;
   }
 
@@ -153,7 +158,12 @@ export class Gateway {
    */
   async imagen(prompt, { modelo = 'auto', ancho = 1024, alto = 1024, estilo = 'fotorrealista', calidad = 'rapida' } = {}) {
     const errores = [];
-    const { cfCuenta, cfToken, pollinations } = this.cfg;
+    const { cfCuenta, cfToken, pollinations, google, openai } = this.cfg;
+    if (esDePago(modelo)) {
+      const r = await generarDePago({ google, openai }, modelo, prompt, { ancho, alto });
+      if (r) return r;
+      throw new Error('La calidad «De pago» necesita tu clave de Google AI Studio (Nano Banana) o de OpenAI (GPT Image): añádela en Ajustes → Modelos y proveedores (Google) o como OPENAI_API_KEY en /root/.config/ia/config.');
+    }
     if (modelo.startsWith('workersai/')) return this.imagenWorkersAI(modelo.slice(10), prompt, ancho, alto);
     if (modelo === 'auto' && cfCuenta && cfToken) {
       const alta = estilo === 'fotorrealista' ? ['@cf/leonardo/lucid-origin', '@cf/black-forest-labs/flux-2-dev'] : ['@cf/black-forest-labs/flux-2-dev', '@cf/leonardo/lucid-origin'];

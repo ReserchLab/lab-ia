@@ -229,7 +229,7 @@
     $('#chip-tamano').hidden = modo !== 'imagen';
     const f = fuentesActivas();
     $('#chip-fuentes span').textContent = f.length > 2 ? `${f.length} fuentes` : f.map(id => est.fuentes.find(x => x.id === id)?.nombre || id).join(', ');
-    $('#chip-tamano span').textContent = `${ESTILOS[estiloActual()][1]} · ${prefs.calidad === 'alta' ? 'alta' : 'rápida'} · ${TAMANOS[prefs.tamano].toLowerCase()}`;
+    $('#chip-tamano span').textContent = `${ESTILOS[estiloActual()][1]} · ${({ alta: 'alta', premium: 'de pago' })[prefs.calidad] || 'rápida'} · ${TAMANOS[prefs.tamano].toLowerCase()}`;
     const modelo = modo === 'imagen' ? prefs.modeloImagen : prefs.modeloTexto;
     let etiqueta = modelo === 'auto' ? 'auto' : nombreModelo(modelo);
     if (modelo === 'auto') {
@@ -555,7 +555,7 @@
     if (meta.combinacion) pintarCombinacion(div, m);
     if (meta.imagenes?.length) {
       div.querySelector('.imagenes').innerHTML = meta.imagenes.map(u => `<div class="imagen-gen"><img src="${esc(u)}" alt="${esc(meta.prompt || 'Imagen generada')}" loading="lazy"></div>`).join('')
-        + (meta.prompt ? `<div class="prompt-usado">${meta.estilo && ESTILOS[meta.estilo] ? `${esc(ESTILOS[meta.estilo][1])}${meta.calidad === 'alta' ? ' · alta' : ''} · ` : ''}${esc(meta.prompt)}</div>` : '');
+        + (meta.prompt ? `<div class="prompt-usado">${meta.estilo && ESTILOS[meta.estilo] ? `${esc(ESTILOS[meta.estilo][1])}${meta.calidad === 'alta' ? ' · alta' : meta.calidad === 'premium' ? ' · de pago' : ''} · ` : ''}${esc(meta.prompt)}</div>` : '');
     }
     const cuerpo = div.querySelector('.cuerpo');
     cuerpo.innerHTML = window.renderMd(m.contenido || '', meta.fuentes);
@@ -732,7 +732,7 @@
         body: JSON.stringify({
           conversacion: est.conv, texto: contenido, regenerar, modo: prefs.modo, skill: prefs.skill,
           modelo: prefs.modeloTexto, modeloImagen: prefs.modeloImagen, tamano: prefs.tamano,
-          estilo: estiloActual(), calidad: prefs.calidad === 'alta' ? 'alta' : 'rapida',
+          estilo: estiloActual(), calidad: ['alta', 'premium'].includes(prefs.calidad) ? prefs.calidad : 'rapida',
           combinar: prefs.modo !== 'imagen' && prefs.combinar?.activa && prefs.combinar.modelos.length >= 2
             ? { modelos: prefs.combinar.modelos, integrador: prefs.combinar.integrador, mostrar: prefs.combinar.mostrar } : undefined,
           fuentes: prefs.modo === 'investigar' ? fuentesActivas() : undefined,
@@ -1023,6 +1023,7 @@
       <div class="cat-skill">Calidad</div>
       <button class="opcion${prefs.calidad !== 'alta' ? ' activa' : ''}" data-calidad="rapida"><span class="ic">⚡</span><span class="txt"><span class="nm">Rápida</span><span class="ds">FLUX.1 schnell: segundos, gasta poca cuota</span></span></button>
       <button class="opcion${prefs.calidad === 'alta' ? ' activa' : ''}" data-calidad="alta"><span class="ic">◆</span><span class="txt"><span class="nm">Alta (profesional)</span><span class="ds">Leonardo Lucid Origin / FLUX.2 dev: más detalle y realismo, gasta más cuota</span></span></button>
+      <button class="opcion${prefs.calidad === 'premium' ? ' activa' : ''}" data-calidad="premium"><span class="ic">★</span><span class="txt"><span class="nm">De pago (opcional)</span><span class="ds">Nano Banana (Gemini, ~0,04 US$) o GPT Image (OpenAI) con tu clave. Lo mejor para figuras científicas y texto preciso.</span></span></button>
       <div class="cat-skill">Tamaño</div>
       ${Object.entries(TAMANOS).map(([k, v]) => `<button class="opcion${prefs.tamano === k ? ' activa' : ''}" data-t="${k}"><span class="ic">${k === 'cuadrado' ? '◻' : k === 'vertical' ? '▯' : '▭'}</span><span class="txt"><span class="nm">${v}</span></span></button>`).join('')}
       <div class="fila-botones"><button class="btn primario" data-op="listo">Listo</button></div>`;

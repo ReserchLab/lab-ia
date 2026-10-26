@@ -3,6 +3,7 @@
 // APIs compatibles con OpenAI, unas sin clave y otras con la clave de cada usuario (cifrada en D1).
 import { recomendados } from '../../comun/tareas.mjs';
 import { cifrar, descifrar } from './cifrado.js';
+import { esDePago, generarDePago, modelosDePago } from '../../comun/imagenes-pago.mjs';
 
 // Modelos de Workers AI disponibles en el plan gratuito (probados uno a uno, 2026-10-26).
 const WAI_TEXTO = [
@@ -41,7 +42,7 @@ export const CATALOGO = [
   { id: 'ovh', nombre: 'OVH AI Endpoints', base: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1', sinClave: true, nota: 'sin clave: 2 peticiones por minuto', enlace: 'https://endpoints.ai.cloud.ovh.net' },
   { id: 'tavily', nombre: 'Tavily', tipo: 'busqueda', nota: '1000 búsquedas al mes gratis', enlace: 'https://app.tavily.com/home', recomendado: 'Búsqueda web: sin ella, Investigar usa solo las bases académicas' },
   { id: 'groq', nombre: 'Groq', base: 'https://api.groq.com/openai/v1', nota: 'gratis, muy rápido', enlace: 'https://console.groq.com/keys', recomendado: 'Texto muy rápido y gratis' },
-  { id: 'google', nombre: 'Google AI Studio (Gemini)', base: 'https://generativelanguage.googleapis.com/v1beta/openai', filtro: id => /gemini|gemma/.test(id) && !/embedding|tts|image|audio|live/.test(id), nota: 'gratis con límites diarios', enlace: 'https://aistudio.google.com/apikey', recomendado: 'Gemini: contexto enorme, ideal para investigar' },
+  { id: 'google', nombre: 'Google AI Studio (Gemini)', base: 'https://generativelanguage.googleapis.com/v1beta/openai', filtro: id => /gemini|gemma/.test(id) && !/embedding|tts|image|audio|live/.test(id), nota: 'texto gratis con límites diarios; imágenes Nano Banana de pago', enlace: 'https://aistudio.google.com/apikey', recomendado: 'Gemini: contexto enorme, ideal para investigar. Con facturación activa, también imágenes Nano Banana (~0,04 US$)' },
   { id: 'openrouter', nombre: 'OpenRouter', base: 'https://openrouter.ai/api/v1', filtro: id => /:free$/.test(id), nota: 'decenas de modelos :free', enlace: 'https://openrouter.ai/keys', recomendado: 'Muchos modelos gratis' },
   { id: 'cerebras', nombre: 'Cerebras', base: 'https://api.cerebras.ai/v1', nota: 'gratis, muy rápido', enlace: 'https://cloud.cerebras.ai' },
   { id: 'mistral', nombre: 'Mistral', base: 'https://api.mistral.ai/v1', filtro: id => !/embed|moderation|ocr/.test(id), nota: 'plan gratuito de experimentación', enlace: 'https://console.mistral.ai/api-keys/' },
@@ -53,7 +54,7 @@ export const CATALOGO = [
   { id: 'llm7', nombre: 'LLM7', base: 'https://api.llm7.io/v1', nota: 'clave gratis', enlace: 'https://dash.llm7.io/#/api-keys' },
   { id: 'zai', nombre: 'Z.ai (GLM)', base: 'https://api.z.ai/api/paas/v4', nota: 'GLM-4.x Flash gratis', enlace: 'https://z.ai/manage-apikey/apikey-list' },
   { id: 'deepseek', nombre: 'DeepSeek', base: 'https://api.deepseek.com/v1', nota: 'de pago, muy barato', enlace: 'https://platform.deepseek.com/api_keys' },
-  { id: 'openai', nombre: 'OpenAI', base: 'https://api.openai.com/v1', filtro: id => /^(gpt|o\d)/.test(id) && !/audio|realtime|tts|transcribe|image|search/.test(id), nota: 'de pago', enlace: 'https://platform.openai.com/api-keys' },
+  { id: 'openai', nombre: 'OpenAI', base: 'https://api.openai.com/v1', filtro: id => /^(gpt|o\d)/.test(id) && !/audio|realtime|tts|transcribe|image|search/.test(id), nota: 'de pago: texto y GPT Image', enlace: 'https://platform.openai.com/api-keys', recomendado: 'Imágenes GPT Image (desde ~0,005 US$ con gpt-image-1-mini)' },
 ];
 const POR_ID = Object.fromEntries(CATALOGO.map(p => [p.id, p]));
 const HORAS_CACHE = 6;
@@ -162,6 +163,7 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
       ...WAI_IMAGEN.map(m => ({ id: `workersai/${m.id}`, nombre: `${m.nombre} · Workers AI` })),
       { id: 'pollinations/flux', nombre: 'Pollinations FLUX (con tu clave gratis)' },
       { id: 'huggingface/black-forest-labs/FLUX.1-schnell', nombre: 'FLUX.1 schnell · Hugging Face (con tu token)' },
+      ...modelosDePago({ google: await claveDe('google'), openai: await claveDe('openai') }),
     ];
   }
 
@@ -266,6 +268,11 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
   // Desde Cloudflare los servicios de imagen sin clave rechazan la petición (IP compartida), así que
   // cuando se agota la cuota diaria de Workers AI hace falta una clave gratis de alguno de los dos.
   async function imagen(prompt, { modelo = 'auto', ancho = 1024, alto = 1024, estilo = 'fotorrealista', calidad = 'rapida' } = {}) {
+    if (esDePago(modelo)) {
+      const r = await generarDePago({ google: await claveDe('google'), openai: await claveDe('openai') }, modelo, prompt, { ancho, alto });
+      if (r) return r;
+      throw Object.assign(new Error('La calidad «De pago» necesita tu clave de Google AI Studio (Nano Banana, ~0,04 US$ por imagen) o de OpenAI (GPT Image). Añádela en Ajustes → Modelos y proveedores.'), { imagen: true });
+    }
     let intentos;
     if (modelo !== 'auto') intentos = [modelo];
     else {

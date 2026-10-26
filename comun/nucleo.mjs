@@ -21,7 +21,7 @@ export const ESTILOS = {
   infografia: { nombre: 'Esquema', guia: 'A clean, minimal flat vector-style scientific diagram with clear shapes and arrows, consistent limited palette and plain background. Leave space for labels but do not write any text.' },
   arte: { nombre: 'Arte', guia: 'An artistic interpretation: choose the art style, medium and palette that best fit the request, with expressive lighting and strong composition.' },
 };
-export const CALIDADES = { rapida: 'Rápida', alta: 'Alta' };
+export const CALIDADES = { rapida: 'Rápida', alta: 'Alta', premium: 'De pago' };
 
 export const SISTEMA_BASE = `Eres lab.ia, un asistente de investigación y creación.
 - Responde en el idioma del usuario (español por defecto), con Markdown claro: títulos cortos, listas y tablas cuando ayuden.
@@ -261,7 +261,7 @@ export function crearNucleo({ gateway, almacen, skills, tareas, guardarImagen, p
       if (modo === 'imagen') {
         const [ancho, alto] = TAMANOS[p.tamano] || TAMANOS.cuadrado;
         const estilo = ESTILOS[p.estilo] ? p.estilo : skill?.id === 'ilustracion-cientifica' ? 'cientifica' : skill?.id === 'imagen-creativa' ? 'arte' : 'fotorrealista';
-        const calidad = p.calidad === 'alta' ? 'alta' : 'rapida';
+        const calidad = CALIDADES[p.calidad] ? p.calidad : 'rapida';
         emitir('estado', { texto: `Preparando el prompt (${ESTILOS[estilo].nombre.toLowerCase()})…` });
         let prompt = pregunta;
         try {
@@ -278,7 +278,8 @@ Return ONLY the prompt.` },
           if (limpio && limpio.length < 2000) prompt = limpio;
         } catch { /* sin LLM se usa la petición tal cual */ }
         emitir('estado', { texto: `Generando la imagen (calidad ${CALIDADES[calidad].toLowerCase()})…`, prompt });
-        const modeloImagen = p.modeloImagen && p.modeloImagen !== 'auto' ? p.modeloImagen : await modeloTarea('imagen');
+        // «De pago» usa Nano Banana o GPT Image con la clave del usuario; nunca se elige solo.
+        const modeloImagen = calidad === 'premium' ? 'premium' : p.modeloImagen && p.modeloImagen !== 'auto' ? p.modeloImagen : await modeloTarea('imagen');
         const img = await gateway.imagen(prompt, { modelo: modeloImagen, ancho, alto, estilo, calidad });
         const url = await guardarImagen(img.datos, img.tipo);
         const meta = { modo, imagenes: [url], prompt, modelo: img.modelo, estilo, calidad, skill: skill?.id || null };
