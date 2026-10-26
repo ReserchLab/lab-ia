@@ -12,7 +12,7 @@ En tu propia cuenta de Cloudflare (gratis) o dentro de tu teléfono. Libre y sin
   <a href="https://github.com/ReserchLab/lab-ia/stargazers"><img src="https://img.shields.io/github/stars/ReserchLab/lab-ia?style=flat&color=ff2d2d&label=%E2%98%85%20estrellas" alt="Estrellas"></a>
   <a href="https://github.com/ReserchLab/lab-ia/releases/latest"><img src="https://img.shields.io/github/v/release/ReserchLab/lab-ia?label=APK&color=111" alt="APK"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-MIT-111" alt="MIT"></a>
-  <a href="https://reserchlab.github.io/lab-ia/"><img src="https://img.shields.io/badge/web-reserchlab.github.io%2Flab--ia-111" alt="Web"></a>
+  <a href="https://labia-ciencia.pages.dev"><img src="https://img.shields.io/badge/web-labia--ciencia.pages.dev-111" alt="Web"></a>
 </p>
 
 ---
