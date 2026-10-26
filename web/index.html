@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <title>lab.ia</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icono.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/fuentes/fuentes.css">
+  <link rel="stylesheet" href="/estilo.css">
+</head>
+<body>
+  <!-- Acceso con PIN (equipos de la red) -->
+  <section id="acceso" class="acceso" hidden>
+    <div class="acceso-caja">
+      <div class="logo grande" aria-hidden="true">LAB<i></i>IA</div>
+      <h1 class="dot">lab.ia</h1>
+      <p class="tenue" id="acceso-texto">Escribe el PIN que aparece en el teléfono<br>(Ajustes → Conexión, o en la terminal de <code>lab</code>).</p>
+      <form id="form-pin" autocomplete="off">
+        <input id="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" aria-label="PIN" required>
+        <button class="btn primario" type="submit">Entrar</button>
+      </form>
+      <form id="form-cuenta" hidden>
+        <input id="cuenta-email" type="email" placeholder="email" autocomplete="username" required>
+        <input id="cuenta-pass" type="password" placeholder="contraseña (mín. 8)" autocomplete="current-password" minlength="8" required>
+        <button class="btn primario" id="cuenta-boton" type="submit">Entrar</button>
+        <button class="enlace-acceso" id="cuenta-cambiar" type="button" hidden>¿No tienes cuenta? Crear una</button>
+      </form>
+      <p id="pin-error" class="error" role="alert"></p>
+    </div>
+  </section>
+
+  <div id="app" class="app" hidden>
+    <!-- Barra lateral: conversaciones -->
+    <aside id="lateral" class="lateral" aria-label="Conversaciones">
+      <div class="lateral-cab">
+        <div class="logo" aria-hidden="true">LAB<i></i>IA</div>
+        <span class="marca">lab.ia</span>
+        <button class="icono-btn solo-movil" data-accion="cerrar-lateral" aria-label="Cerrar">✕</button>
+      </div>
+      <button class="btn nuevo" data-accion="nueva">＋ Nueva conversación</button>
+      <input id="buscar-conv" class="buscar" type="search" placeholder="Buscar conversaciones">
+      <nav id="lista-conv" class="lista-conv"></nav>
+      <div class="lateral-pie">
+        <button class="enlace-pie" data-accion="skills">◇ Skills</button>
+        <button class="enlace-pie" data-accion="ajustes">⚙ Ajustes</button>
+      </div>
+    </aside>
+    <div id="velo" class="velo" data-accion="cerrar-lateral" hidden></div>
+
+    <main class="principal">
+      <header class="barra">
+        <button class="icono-btn solo-movil" data-accion="abrir-lateral" aria-label="Conversaciones">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="5" cy="7" r="1.6"/><circle cx="12" cy="7" r="1.6"/><circle cx="19" cy="7" r="1.6"/><circle cx="5" cy="17" r="1.6"/><circle cx="12" cy="17" r="1.6"/></svg>
+        </button>
+        <button id="titulo-skill" class="titulo-skill" data-accion="elegir-skill">
+          <span id="skill-icono" class="skill-icono">◎</span>
+          <span id="skill-nombre">Asistente general</span>
+          <span class="flecha">▾</span>
+        </button>
+        <button class="icono-btn" data-accion="memoria" aria-label="Memoria del chat" title="Memoria del chat">◷</button>
+        <span id="estado-gw" class="estado-gw" title="FreeLLMAPI"></span>
+      </header>
+
+      <section id="mensajes" class="mensajes" aria-live="polite"></section>
+
+      <footer class="redactor">
+        <div class="modos" role="tablist" aria-label="Modo">
+          <button role="tab" data-modo="chat" class="modo">Chat</button>
+          <button role="tab" data-modo="investigar" class="modo">Investigar</button>
+          <button role="tab" data-modo="imagen" class="modo">Imagen</button>
+        </div>
+        <form id="form-msg" class="caja-msg">
+          <textarea id="texto" rows="1" placeholder="Pregunta lo que quieras…" enterkeyhint="send"></textarea>
+          <button id="enviar" class="enviar" type="submit" aria-label="Enviar">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+        <div class="chips">
+          <button class="chip" id="chip-fuentes" data-accion="fuentes" hidden>⌕ <span>Fuentes</span></button>
+          <button class="chip" id="chip-tamano" data-accion="tamano" hidden>▭ <span>Cuadrada</span></button>
+          <button class="chip" id="chip-modelo" data-accion="modelo">◈ <span>auto</span></button>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Hoja inferior reutilizable -->
+  <div id="hoja-velo" class="hoja-velo" hidden></div>
+  <section id="hoja" class="hoja" role="dialog" aria-modal="true" hidden>
+    <div class="hoja-asa"></div>
+    <header class="hoja-cab"><h2 id="hoja-titulo"></h2><button class="icono-btn" data-accion="cerrar-hoja" aria-label="Cerrar">✕</button></header>
+    <div id="hoja-cuerpo" class="hoja-cuerpo"></div>
+  </section>
+
+  <div id="visor" class="visor" hidden><img alt=""><div class="visor-acciones"><a class="btn" id="visor-guardar" download>Guardar</a><button class="btn" data-accion="cerrar-visor">Cerrar</button></div></div>
+  <div id="aviso" class="aviso" role="status" hidden></div>
+
+  <script src="/vendor/qrcode.js"></script>
+  <script src="/md.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

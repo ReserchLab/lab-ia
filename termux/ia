@@ -1,0 +1,310 @@
+#!/bin/bash
+# ia — menú para usar Claude Code o Codex a través de FreeLLMAPI.
+# Uso: ia            (menú)
+#      ia claude     (directo a Claude Code vía FreeLLMAPI)
+#      ia codex      (directo a Codex vía FreeLLMAPI)
+# Las credenciales solo se pasan al proceso hijo (freellmapi launch):
+# ~/.claude/settings.json y ~/.codex/config.toml no se modifican.
+
+export PATH="/root/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export HOME=/root
+
+CONF_DIR="$HOME/.config/ia"
+CONF="$CONF_DIR/config"
+FLA="npx -y freellmapi@0.8.2"
+
+B=$'\e[1m'; G=$'\e[32m'; R=$'\e[31m'; Y=$'\e[33m'; C=$'\e[36m'; N=$'\e[0m'
+
+defaults() {
+  FREELLMAPI_URL="http://127.0.0.1:31415"
+  FREELLMAPI_API_KEY=""   # se rellena en Configuración → API key
+  IA_MODEL_CLAUDE=""
+  IA_MODEL_CODEX=""
+  IA_DIR="/root/projects"
+  FREELLMAPI_DASHBOARD_TOKEN=""
+}
+
+save() {
+  mkdir -p "$CONF_DIR"
+  umask 077
+  cat > "$CONF" <<EOF
+FREELLMAPI_URL="$FREELLMAPI_URL"
+FREELLMAPI_API_KEY="$FREELLMAPI_API_KEY"
+IA_MODEL_CLAUDE="$IA_MODEL_CLAUDE"
+IA_MODEL_CODEX="$IA_MODEL_CODEX"
+IA_DIR="$IA_DIR"
+FREELLMAPI_DASHBOARD_TOKEN="$FREELLMAPI_DASHBOARD_TOKEN"
+EOF
+  chmod 600 "$CONF"
+}
+
+load() {
+  defaults
+  [ -f "$CONF" ] && . "$CONF" || save
+  export FREELLMAPI_URL FREELLMAPI_API_KEY FREELLMAPI_DASHBOARD_TOKEN
+}
+
+pause() { read -rp "Enter para volver al menú…" _; }
+
+gateway_ok() {
+  curl -s -m 4 -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $FREELLMAPI_API_KEY" "$FREELLMAPI_URL/v1/models" | grep -q '^200$'
+}
+
+SRV_DIR=/root/freellmapi
+SRV_LOG="$SRV_DIR/logs/server.log"
+
+server_up() { curl -s -m 3 -o /dev/null "$FREELLMAPI_URL/api/ping"; }
+
+# Enciende el servidor local de FreeLLMAPI si no está corriendo.
+start_gateway() {
+  server_up && return 0
+  [ -f "$SRV_DIR/server/dist/index.js" ] || return 1
+  echo "${C}Encendiendo FreeLLMAPI…${N}"
+  mkdir -p "$SRV_DIR/logs"
+  (cd "$SRV_DIR" && set -a && . ./.env && set +a &&
+    setsid nohup node server/dist/index.js >> "$SRV_LOG" 2>&1 < /dev/null &
+    echo $! > "$SRV_DIR/logs/server.pid")
+  local i; for i in $(seq 1 30); do server_up && return 0; sleep 1; done
+  echo "${R}No arrancó. Últimas líneas del log:${N}"; tail -15 "$SRV_LOG"
+  return 1
+}
+
+stop_gateway() {
+  pkill -f "^node server/dist/index.js" && echo "${Y}FreeLLMAPI apagado.${N}"
+}
+
+check_gateway() {
+  if gateway_ok; then return 0; fi
+  if server_up; then
+    echo "${R}FreeLLMAPI está encendido pero rechaza la API key.${N}"
+    echo "Copia la clave del dashboard (página Keys) en Configuración → API key."
+  else
+    echo "${R}FreeLLMAPI no responde en $FREELLMAPI_URL${N}"
+  fi
+  return 1
+}
+
+model_ids() {
+  curl -s -m 8 -H "Authorization: Bearer $FREELLMAPI_API_KEY" "$FREELLMAPI_URL/v1/models" |
+    node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{(JSON.parse(s).data||[]).forEach(m=>console.log(m.id))}catch(e){}})'
+}
+
+model_flag() { [ -n "$1" ] && echo "--model $1"; }
+
+run_claude() {
+  check_gateway || return 1
+  cd "$IA_DIR" 2>/dev/null || cd "$HOME"
+  echo "${C}Claude Code → FreeLLMAPI ${IA_MODEL_CLAUDE:+($IA_MODEL_CLAUDE)} en $(pwd)${N}"
+  $FLA launch --url "$FREELLMAPI_URL" --api-key "$FREELLMAPI_API_KEY" $(model_flag "$IA_MODEL_CLAUDE")
+}
+
+run_codex() {
+  check_gateway || return 1
+  cd "$IA_DIR" 2>/dev/null || cd "$HOME"
+  echo "${C}Codex → FreeLLMAPI ${IA_MODEL_CODEX:+($IA_MODEL_CODEX)} en $(pwd)${N}"
+  $FLA launch-codex --url "$FREELLMAPI_URL" --api-key "$FREELLMAPI_API_KEY" $(model_flag "$IA_MODEL_CODEX")
+}
+
+pick_model() {   # $1 = claude|codex
+  check_gateway || { pause; return; }
+  local out; out=$(model_ids); ids=(); [ -n "$out" ] && mapfile -t ids <<<"$out"
+  if [ ${#ids[@]} -eq 0 ]; then echo "${R}El gateway no devolvió modelos.${N}"; pause; return; fi
+  echo "${B}Modelos disponibles para $1:${N}"
+  echo "  0) Automático (el que elija FreeLLMAPI)"
+  local i; for i in "${!ids[@]}"; do printf '  %d) %s\n' $((i+1)) "${ids[$i]}"; done
+  read -rp "Número: " n
+  local sel=""
+  if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le ${#ids[@]} ]; then sel="${ids[$((n-1))]}"
+  elif [ "$n" != "0" ]; then echo "Sin cambios."; pause; return; fi
+  if [ "$1" = claude ]; then IA_MODEL_CLAUDE="$sel"; else IA_MODEL_CODEX="$sel"; fi
+  save; echo "${G}Guardado: ${sel:-automático}${N}"; pause
+}
+
+status() {
+  echo "${B}Estado${N}"
+  echo "  URL:          $FREELLMAPI_URL   (Claude usa la raíz, Codex $FREELLMAPI_URL/v1)"
+  echo "  API key:      ${FREELLMAPI_API_KEY:0:16}…"
+  echo "  Modelo Claude: ${IA_MODEL_CLAUDE:-automático}"
+  echo "  Modelo Codex:  ${IA_MODEL_CODEX:-automático}"
+  echo "  Carpeta:      $IA_DIR"
+  echo "  Dashboard:    $FREELLMAPI_URL  (ábrelo en el navegador del teléfono)"
+  if gateway_ok; then
+    echo "  Gateway:      ${G}en línea${N} — $(model_ids | wc -l) modelos"
+  else
+    echo "  Gateway:      ${R}sin respuesta${N}"
+  fi
+  pause
+}
+
+PROV="node /usr/local/lib/ia/proveedores.mjs"
+TERMUX_BIN=/data/data/com.termux/files/usr/bin
+
+open_url() {
+  PATH="$TERMUX_BIN:$PATH" termux-open-url "$1" >/dev/null 2>&1 \
+    && echo "${G}Abierto en el navegador.${N}" || echo "Ábrelo a mano: $1"
+}
+
+# Crea la cuenta del dashboard (primera vez) o inicia sesión, y guarda el token.
+ensure_session() {
+  local st email pass pass2 token first=""
+  st=$($PROV status) || return 1
+  [ "$st" = authenticated ] && return 0
+  if [ "$st" = needsSetup ]; then
+    echo "${B}Crear la cuenta del dashboard de FreeLLMAPI${N} (solo esta vez)"
+    read -rp "Email: " email
+    read -rsp "Contraseña (mín. 8): " pass; echo
+    read -rsp "Repite la contraseña: " pass2; echo
+    [ "$pass" = "$pass2" ] || { echo "${R}No coinciden.${N}"; return 1; }
+    token=$($PROV setup "$email" "$pass") || return 1
+    first=1
+  else
+    echo "${B}Inicia sesión en el dashboard de FreeLLMAPI${N}"
+    read -rp "Email: " email
+    read -rsp "Contraseña: " pass; echo
+    token=$($PROV login "$email" "$pass") || return 1
+  fi
+  FREELLMAPI_DASHBOARD_TOKEN="$token"; export FREELLMAPI_DASHBOARD_TOKEN; save
+  echo "${G}Sesión iniciada.${N}"
+  if [ -n "$first" ]; then
+    echo "Activando los proveedores gratis que no piden clave…"
+    $PROV auto
+  fi
+}
+
+add_key() {
+  local rows sel line plat name url key
+  local out; out=$($PROV list 2>/dev/null); rows=(); [ -n "$out" ] && mapfile -t rows <<<"$out"
+  [ ${#rows[@]} -eq 0 ] && { echo "${R}No se pudo leer la lista de proveedores.${N}"; return; }
+  echo "${B}Proveedores${N}  (✔ configurado · ○ funciona sin clave)"
+  for line in "${rows[@]}"; do
+    IFS=$'\t' read -r n plat mark name url <<<"$line"
+    printf '%3s) %s %s\n' "$n" "${mark:- }" "$name"
+  done
+  read -rp "Número del proveedor (vacío para volver): " sel
+  [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -ge 1 ] && [ "$sel" -le ${#rows[@]} ] || return
+  IFS=$'\t' read -r n plat mark name url <<<"${rows[$((sel-1))]}"
+  echo
+  echo "${B}$name${N} ($plat)"
+  if [ -n "$url" ]; then
+    echo "Consigue la clave aquí: ${C}$url${N}"
+    read -rp "¿Abrir el enlace en el navegador? [S/n] " a
+    [[ "$a" =~ ^[nN] ]] || open_url "$url"
+  fi
+  read -rsp "Pega la API key (vacío para cancelar): " key; echo
+  [ -z "$key" ] && return
+  $PROV add "$plat" "$key" && $FLA keys test "$plat" --url "$FREELLMAPI_URL"
+}
+
+keys_menu() {
+  ensure_session || { pause; return; }
+  while true; do
+    clear
+    echo "${B}Proveedores y claves API (FreeLLMAPI)${N}"
+    echo "  1) Activar los gratis sin clave (Kilo, OVH, LLM7, AI Horde…)"
+    echo "  2) Añadir clave de un proveedor (con enlace para conseguirla)"
+    echo "  3) Ver claves guardadas"
+    echo "  4) Probar las claves de un proveedor"
+    echo "  5) Quitar una clave"
+    echo "  6) Abrir el dashboard web"
+    echo "  7) Cerrar sesión del dashboard"
+    echo "  0) Volver"
+    read -rp "> " o
+    case "$o" in
+      1) $PROV auto; pause ;;
+      2) add_key; pause ;;
+      3) $FLA keys list --url "$FREELLMAPI_URL"; pause ;;
+      4) read -rp "Proveedor (ej. groq): " p; [ -n "$p" ] && $FLA keys test "$p" --url "$FREELLMAPI_URL"; pause ;;
+      5) $FLA keys list --url "$FREELLMAPI_URL"
+         read -rp "Proveedor: " p; read -rp "ID (vacío si solo hay una): " id
+         [ -n "$p" ] && $FLA keys remove "$p" --url "$FREELLMAPI_URL" ${id:+--id "$id"}; pause ;;
+      6) open_url "$FREELLMAPI_URL"; pause ;;
+      7) FREELLMAPI_DASHBOARD_TOKEN=""; save; echo "Sesión cerrada."; pause; return ;;
+      0|"") return ;;
+    esac
+  done
+}
+
+lab_info() {
+  local e
+  e=$(curl -s -m 4 http://127.0.0.1:8790/api/estado) || e=""
+  if [ -z "$e" ]; then
+    echo "${Y}lab.ia está apagado.${N}"
+    echo "Enciéndelo desde Termux (fuera de este menú) con:  ${B}lab${N}"
+    echo "o abre la app lab.ia y pulsa «Encender servidor en Termux»."
+    return
+  fi
+  echo "$e" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const e=JSON.parse(s);
+    console.log("\x1b[32mlab.ia "+e.version+" encendido\x1b[0m");
+    console.log("  Este teléfono:  http://127.0.0.1:8790");
+    for (const d of e.direcciones||[]) if (d.tipo!=="Datos móviles") console.log("  "+d.tipo.padEnd(16)+d.url);
+    console.log("  PIN para otros equipos: "+e.pin);})'
+}
+
+config_menu() {
+  while true; do
+    clear
+    echo "${B}Configuración${N}"
+    echo "  1) URL del gateway      ($FREELLMAPI_URL)"
+    echo "  2) API key unificada    (${FREELLMAPI_API_KEY:0:16}…)"
+    echo "  3) Modelo para Claude   (${IA_MODEL_CLAUDE:-automático})"
+    echo "  4) Modelo para Codex    (${IA_MODEL_CODEX:-automático})"
+    echo "  5) Carpeta de trabajo   ($IA_DIR)"
+    echo "  6) Proveedores y claves API"
+    echo "  7) Restablecer valores por defecto"
+    echo "  8) Servidor: reiniciar     9) Servidor: ver log"
+    echo "  0) Volver"
+    read -rp "> " o
+    case "$o" in
+      1) read -rp "Nueva URL (sin /v1): " v; [ -n "$v" ] && FREELLMAPI_URL="${v%/}" && FREELLMAPI_URL="${FREELLMAPI_URL%/v1}" && save ;;
+      2) read -rp "Nueva API key: " v; [ -n "$v" ] && FREELLMAPI_API_KEY="$v" && save ;;
+      3) pick_model claude ;;
+      4) pick_model codex ;;
+      5) read -rp "Carpeta: " v; if [ -d "$v" ]; then IA_DIR="$v"; save; else echo "No existe."; pause; fi ;;
+      6) keys_menu ;;
+      7) defaults; save; echo "${G}Restablecido.${N}"; pause ;;
+      8) stop_gateway; sleep 2; start_gateway && echo "${G}Encendido.${N}"; pause ;;
+      9) tail -40 "$SRV_LOG"; pause ;;
+      0|"") export FREELLMAPI_URL FREELLMAPI_API_KEY; return ;;
+    esac
+  done
+}
+
+menu() {
+  while true; do
+    clear
+    if gateway_ok; then st="${G}● en línea${N}"; else st="${R}● apagado${N}"; fi
+    echo "${B}╭─ IA en Debian ─ FreeLLMAPI $st${B} ─╮${N}"
+    echo "  1) Claude Code  ${Y}(FreeLLMAPI)${N}"
+    echo "  2) Codex        ${Y}(FreeLLMAPI)${N}"
+    echo "  3) Claude Code  (tu cuenta Anthropic normal)"
+    echo "  4) Codex        (tu cuenta OpenAI normal)"
+    echo "  5) Configuración (URL, clave, modelos, carpeta, proveedores)"
+    echo "  6) Estado del gateway"
+    echo "  7) Terminal de Debian"
+    echo "  8) Proveedores y claves API (activar gratis, añadir claves)"
+    echo "  9) lab.ia (app de chat e investigación)"
+    echo "  0) Salir"
+    read -rp "> " o || exit 0
+    case "$o" in
+      1) run_claude || pause ;;
+      2) run_codex || pause ;;
+      3) (cd "$IA_DIR" 2>/dev/null; claude) ;;
+      4) (cd "$IA_DIR" 2>/dev/null; codex) ;;
+      5) config_menu ;;
+      6) status ;;
+      7) (cd "$IA_DIR" 2>/dev/null; echo "Escribe 'exit' para volver al menú."; bash -l) ;;
+      8) keys_menu ;;
+      9) lab_info; pause ;;
+      0|q) exit 0 ;;
+    esac
+  done
+}
+
+load
+start_gateway
+case "$1" in
+  claude) run_claude ;;
+  codex)  run_codex ;;
+  *)      menu ;;
+esac

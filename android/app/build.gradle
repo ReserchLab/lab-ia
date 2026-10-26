@@ -1,0 +1,26 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.cardon.lab'
+    compileSdk 34
+    buildToolsVersion '34.0.0'
+    defaultConfig {
+        applicationId 'com.cardon.lab'
+        minSdk 24
+        targetSdk 34
+        versionCode 3
+        versionName '1.2.0'
+    }
+    buildTypes {
+        // ./gradlew assembleRelease -PfirmaLocal la firma con la llave de depuración de este equipo.
+        release { if (project.hasProperty('firmaLocal')) signingConfig signingConfigs.debug }
+    }
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

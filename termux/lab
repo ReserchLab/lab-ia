@@ -1,0 +1,49 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# lab.ia: enciende el servidor (Debian) en segundo plano y muestra cómo conectarse.
+#   lab            enciende (si hace falta) y muestra direcciones y PIN
+#   lab detener    apaga lab.ia
+#   lab reiniciar  lo apaga y lo vuelve a encender
+#   lab log        muestra el registro
+LOG="$HOME/.cardon-lab.log"
+URL=http://127.0.0.1:8790
+
+arriba() { curl -s -m 3 -o /dev/null "$URL/api/estado"; }
+
+info() {
+  curl -s -m 5 "$URL/api/estado" | python3 -c '
+import json, sys
+e = json.load(sys.stdin)
+print("\n  lab.ia " + e["version"] + "  ·  FreeLLMAPI " + ("en línea" if e.get("gateway") else "SIN RESPUESTA"))
+print("  En este teléfono:  http://127.0.0.1:8790   (o abre la app lab.ia)")
+for d in e.get("direcciones") or []:
+    if d["tipo"] != "Datos móviles":
+        print("  %-18s %s" % (d["tipo"], d["url"]))
+        print("  %-18s %s/descargar" % ("  APK:", d["url"]))
+print("  PIN para otros equipos: " + e["pin"] + "\n")
+' 2>/dev/null || echo "  lab.ia activo en $URL"
+}
+
+detener() {
+  pkill -f "cardon-lab/servidor/servidor.mjs" && echo "lab.ia apagado." || echo "No estaba encendido."
+  pkill -f "lab-servidor" 2>/dev/null
+  for _ in $(seq 1 10); do arriba || break; sleep 1; done
+}
+
+case "$1" in
+  detener|stop)
+    detener
+    termux-wake-unlock 2>/dev/null
+    exit 0 ;;
+  reiniciar|restart)
+    detener ;;
+  log) tail -n 60 "$LOG"; exit 0 ;;
+esac
+
+if ! arriba; then
+  echo "Encendiendo lab.ia…"
+  termux-wake-lock 2>/dev/null || true
+  nohup proot-distro login debian --shared-tmp -- /usr/local/bin/lab-servidor >> "$LOG" 2>&1 < /dev/null &
+  for _ in $(seq 1 60); do arriba && break; sleep 1; done
+  arriba || { echo "No arrancó. Mira el registro con: lab log"; exit 1; }
+fi
+[ "$1" = "iniciar" ] || [ "$1" = "reiniciar" ] || info

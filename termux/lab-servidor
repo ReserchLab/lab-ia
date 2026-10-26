@@ -1,0 +1,24 @@
+#!/bin/bash
+# Arranca FreeLLMAPI (si no está) y lab.ia en primer plano dentro de Debian.
+# Lo lanza el comando `lab` de Termux en segundo plano.
+export PATH="/root/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export HOME=/root
+FLA_DIR=/root/freellmapi
+LAB_DIR=/root/projects/cardon-lab
+
+fla_arriba() { curl -s -m 3 -o /dev/null http://127.0.0.1:31415/api/ping; }
+
+fla_encender() {
+  fla_arriba && return 0
+  [ -f "$FLA_DIR/server/dist/index.js" ] || { echo "FreeLLMAPI no está instalado en $FLA_DIR"; return 1; }
+  echo "Encendiendo FreeLLMAPI…"
+  (cd "$FLA_DIR" && set -a && . ./.env && set +a &&
+    setsid nohup node server/dist/index.js >> "$FLA_DIR/logs/server.log" 2>&1 < /dev/null &)
+  for _ in $(seq 1 60); do fla_arriba && return 0; sleep 1; done
+  echo "FreeLLMAPI no arrancó; revisa $FLA_DIR/logs/server.log"
+}
+
+fla_encender
+# Vigila FreeLLMAPI: si otra sesión lo apaga (p. ej. al salir de `ia`), lo vuelve a encender.
+( while sleep 10; do fla_arriba || fla_encender; done ) &
+exec node "$LAB_DIR/servidor/servidor.mjs"

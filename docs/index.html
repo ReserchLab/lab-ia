@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<title>lab.ia — investigación científica con IA</title>
+<meta name="description" content="Chat, investigación científica verificada e imágenes con IA. En tu Cloudflare gratis o en tu teléfono. Libre (MIT).">
+<meta property="og:title" content="lab.ia">
+<meta property="og:description" content="Chat, investigación científica verificada e imágenes con IA. Libre y gratis en tu propia nube.">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="stylesheet" href="fuentes/fuentes.css">
+<style>
+  :root { --negro: #000; --sup: #0e0e0e; --sup2: #161616; --linea: #232323; --linea2: #333; --texto: #f2f2f2; --tenue: #8d8d8d; --apagado: #5c5c5c; --rojo: #ff2d2d; --verde: #5ee08a;
+    --dot: 'Doto', 'Space Mono', monospace; --mono: 'Space Mono', ui-monospace, monospace; --sans: 'Space Grotesk', system-ui, sans-serif; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--negro); color: var(--texto); font: 17px/1.6 var(--sans); }
+  body { background: radial-gradient(circle, #151515 1px, transparent 1.2px) 0 0/20px 20px, var(--negro); }
+  a { color: var(--texto); text-decoration-color: var(--rojo); text-underline-offset: 3px; }
+  code, pre { font-family: var(--mono); }
+  .envoltura { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  nav { display: flex; align-items: center; gap: 12px; padding: 18px 0; }
+  nav .esp { flex: 1; }
+  nav a.menu { font: 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--tenue); text-decoration: none; }
+  nav a.menu:hover { color: var(--texto); }
+  .logo { font-family: var(--dot); font-weight: 800; letter-spacing: .08em; line-height: 1; display: inline-flex; align-items: flex-end; gap: .08em; }
+  .logo i { width: .26em; height: .26em; border-radius: 50%; background: var(--rojo); box-shadow: 0 0 .3em var(--rojo); margin-bottom: .1em; display: inline-block; }
+  .heroe { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: center; padding: 48px 0 72px; }
+  .heroe .logo { font-size: clamp(64px, 14vw, 132px); }
+  .lema { font-size: clamp(22px, 3.4vw, 30px); line-height: 1.25; margin: 22px 0 12px; font-weight: 500; }
+  .lema span { color: var(--rojo); }
+  .sub { color: var(--tenue); margin: 0 0 28px; max-width: 34em; }
+  .botones { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 20px; border-radius: 999px; border: 1px solid var(--linea2); background: var(--sup); font-weight: 500; text-decoration: none; }
+  .btn:hover { border-color: var(--tenue); }
+  .btn.primario { background: var(--texto); color: var(--negro); border-color: var(--texto); }
+  .btn.rojo { background: var(--rojo); border-color: var(--rojo); color: #fff; }
+  .chico { font: 12px var(--mono); color: var(--apagado); margin-top: 14px; }
+
+  /* Maqueta del teléfono */
+  .telefono { width: min(340px, 100%); margin: 0 auto; border-radius: 44px; border: 1px solid var(--linea2); background: #050505; padding: 14px; box-shadow: 0 30px 80px rgba(255,45,45,.08), 0 0 0 6px #0a0a0a; }
+  .pantalla { border-radius: 32px; overflow: hidden; background: #000; border: 1px solid var(--linea); font-size: 12.5px; }
+  .p-barra { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--linea); }
+  .p-barra .pt { width: 7px; height: 7px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+  .p-cuerpo { padding: 14px; display: grid; gap: 10px; }
+  .p-user { justify-self: end; background: var(--sup2); border: 1px solid var(--linea); border-radius: 16px 16px 4px 16px; padding: 8px 11px; max-width: 85%; }
+  .p-etq { font: 9.5px var(--mono); letter-spacing: .12em; color: var(--apagado); text-transform: uppercase; display: flex; gap: 6px; align-items: center; }
+  .p-etq::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--rojo); }
+  .p-resp { color: #ddd; line-height: 1.5; }
+  .cita { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; border-radius: 5px; background: rgba(255,45,45,.14); color: var(--rojo); font: 700 .72em var(--mono); vertical-align: .2em; }
+  .p-verif { border: 1px solid var(--linea); border-radius: 12px; padding: 8px 10px; font: 10.5px var(--mono); color: var(--tenue); }
+  .p-verif b { color: var(--verde); font-weight: 400; }
+  .p-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .p-chips span { border: 1px solid var(--linea2); border-radius: 999px; padding: 3px 8px; font: 10px var(--mono); }
+  .p-redactor { border-top: 1px solid var(--linea); padding: 10px 12px 14px; }
+  .p-modos { display: flex; gap: 3px; background: var(--sup); border: 1px solid var(--linea); border-radius: 999px; padding: 3px; width: fit-content; margin-bottom: 8px; font: 10px var(--mono); }
+  .p-modos span { padding: 4px 9px; border-radius: 999px; color: var(--tenue); }
+  .p-modos .on { background: var(--rojo); color: #fff; }
+  .p-caja { display: flex; align-items: center; gap: 8px; border: 1px solid var(--linea2); border-radius: 22px; padding: 6px 6px 6px 12px; color: var(--apagado); }
+  .p-caja .env { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; background: var(--texto); }
+
+  section { padding: 56px 0; border-top: 1px dashed var(--linea); }
+  h2 { font: 800 clamp(30px, 5vw, 44px) var(--dot); margin: 0 0 8px; letter-spacing: .02em; }
+  .h2-sub { color: var(--tenue); margin: 0 0 28px; }
+  .rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .tarjeta { border: 1px solid var(--linea); border-radius: 20px; padding: 18px; background: rgba(5,5,5,.85); }
+  .tarjeta .ic { font-size: 26px; }
+  .tarjeta h3 { margin: 8px 0 6px; font-size: 18px; }
+  .tarjeta p { margin: 0; color: var(--tenue); font-size: 15px; }
+  .pasos { counter-reset: paso; display: grid; gap: 12px; padding: 0; list-style: none; }
+  .pasos li { counter-increment: paso; display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: start; border: 1px solid var(--linea); border-radius: 18px; padding: 14px; background: rgba(5,5,5,.85); }
+  .pasos li::before { content: counter(paso); font: 800 26px var(--dot); color: var(--rojo); text-align: center; }
+  .tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  pre { background: #0a0a0a; border: 1px solid var(--linea); border-radius: 14px; padding: 14px; overflow-x: auto; font-size: 13px; color: #cfcfcf; }
+  .fuentes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fuentes span { border: 1px solid var(--linea2); border-radius: 999px; padding: 6px 12px; font: 13px var(--mono); }
+  .donar { text-align: center; max-width: 560px; margin: 0 auto; }
+  .dir { font: 14px var(--mono); word-break: break-all; border: 1px dashed var(--linea2); border-radius: 14px; padding: 14px; margin: 14px 0; background: var(--sup); }
+  .firma { font: 13px var(--mono); color: var(--tenue); }
+  footer { padding: 36px 0 60px; border-top: 1px dashed var(--linea); color: var(--apagado); font: 12px var(--mono); text-align: center; }
+  @media (max-width: 860px) { .heroe { grid-template-columns: 1fr; padding-top: 20px; } .tres { grid-template-columns: 1fr; } nav a.menu { display: none; } }
+</style>
+</head>
+<body>
+<div class="envoltura">
+  <nav>
+    <span class="logo" style="font-size:22px">LAB<i></i>IA</span>
+    <span class="esp"></span>
+    <a class="menu" href="#funciones">Funciones</a>
+    <a class="menu" href="#empezar">Empezar</a>
+    <a class="menu" href="#apoyar">Apoyar</a>
+    <a class="btn" href="https://github.com/ReserchLab/lab-ia" style="min-height:40px">★ GitHub</a>
+  </nav>
+
+  <header class="heroe">
+    <div>
+      <div class="logo" aria-label="lab.ia">LAB<i></i>IA</div>
+      <p class="lema">Investigación científica con IA, <span>con fuentes reales y verificadas.</span></p>
+      <p class="sub">Chat, investigación en PubMed, Europe PMC, Semantic Scholar y 10 bases más, imágenes y 21 skills de ciencia. En tu propia nube de Cloudflare, gratis, o dentro de tu teléfono. Libre y sin publicidad.</p>
+      <div class="botones">
+        <a class="btn rojo" href="https://deploy.workers.cloudflare.com/?url=https://github.com/ReserchLab/lab-ia">☁ Desplegar en mi Cloudflare</a>
+        <a class="btn primario" href="https://github.com/ReserchLab/lab-ia/releases/latest/download/lab.ia.apk">↓ App Android</a>
+        <a class="btn" href="https://github.com/ReserchLab/lab-ia">★ Dar una estrella</a>
+      </div>
+      <p class="chico">MIT · 130 KB · Android 7+ · sin cuentas de terceros</p>
+    </div>
+    <div class="telefono" aria-hidden="true">
+      <div class="pantalla">
+        <div class="p-barra"><span>⁘</span><span>⊛ Investigación verificada ▾</span><span class="pt"></span></div>
+        <div class="p-cuerpo">
+          <div class="p-user">¿La metformina reduce el riesgo de cáncer?</div>
+          <div class="p-etq">Investigación verificada · Investigar</div>
+          <div class="p-verif"><b>✓ verificada</b> · enlaces 6/6 · afirmaciones 9/10 · revisadas por ti 3/12</div>
+          <div class="p-resp"><b>Respuesta corta:</b> en diabéticos tipo 2, el uso de metformina se asocia a menor incidencia de algunos cánceres <span class="cita">2</span><span class="cita">5</span>, pero los ensayos aleatorizados no confirman un efecto preventivo <span class="cita">7</span>…</div>
+          <div class="p-chips"><span>PubMed ↗</span><span>Europe PMC ↗</span><span>Scholar ↗</span><span>Crossref ↗</span></div>
+        </div>
+        <div class="p-redactor">
+          <div class="p-modos"><span>Chat</span><span class="on">Investigar</span><span>Imagen</span></div>
+          <div class="p-caja">¿Qué investigamos?<span class="env"></span></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="funciones">
+    <h2>Funciones</h2>
+    <p class="h2-sub">Todo lo necesario para investigar en serio desde el móvil.</p>
+    <div class="rejilla">
+      <div class="tarjeta"><div class="ic">⌕</div><h3>Investigar con citas</h3><p>Busca en 13 fuentes académicas y la web, lee las páginas y responde citando cada afirmación con [n].</p></div>
+      <div class="tarjeta"><div class="ic">⊛</div><h3>Verificación doble</h3><p>Automática (citas, enlaces, DOI en Crossref y cada afirmación contra su fuente) y manual: marcas cada fuente que revisaste.</p></div>
+      <div class="tarjeta"><div class="ic">↗</div><h3>Búsquedas reproducibles</h3><p>Cada respuesta trae el enlace real de la consulta en PubMed, Europe PMC, Scholar… para repetirla tú.</p></div>
+      <div class="tarjeta"><div class="ic">◷</div><h3>Memoria del chat</h3><p>Recuerda la conversación y las referencias exactas citadas. Puedes ver y editar lo que recuerda.</p></div>
+      <div class="tarjeta"><div class="ic">◈</div><h3>Modelo por tarea</h3><p>gpt-oss 120B, Nemotron 3, Qwen 3.8, Gemma 4… uno para investigar, otro para razonar o programar. «Auto» cambia si uno falla.</p></div>
+      <div class="tarjeta"><div class="ic">◉</div><h3>Imágenes</h3><p>Ilustración científica y creativa con FLUX, Leonardo y SDXL.</p></div>
+      <div class="tarjeta"><div class="ic">⌬</div><h3>21 skills de ciencia</h3><p>Biología molecular, ensayos clínicos, fármacos, ecología, scRNA-seq, nf-core, revisor de artículos… y crea las tuyas con IA.</p></div>
+      <div class="tarjeta"><div class="ic">⌘</div><h3>API compatible con OpenAI</h3><p>Tu clave labia-… para usar tus modelos desde Codex, Cline o cualquier SDK.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Fuentes</h2>
+    <p class="h2-sub">APIs públicas y gratuitas, sin claves.</p>
+    <div class="fuentes"><span>PubMed</span><span>Europe PMC</span><span>Semantic Scholar</span><span>OpenAlex</span><span>Crossref</span><span>arXiv</span><span>UniProt</span><span>NCBI Gene</span><span>ClinicalTrials.gov</span><span>ChEMBL</span><span>PubChem</span><span>Wikipedia</span><span>Web (Tavily)</span><span>+ Google Scholar para revisar</span></div>
+  </section>
+
+  <section id="empezar">
+    <h2>Empezar</h2>
+    <p class="h2-sub">Tres formas. La primera es la más fácil.</p>
+    <div class="tres">
+      <div class="tarjeta"><div class="ic">☁</div><h3>En tu Cloudflare</h3><p>Un clic en <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/ReserchLab/lab-ia">Deploy to Cloudflare</a>, crea tu cuenta y listo. Tus datos y claves quedan en tu cuenta. El plan gratuito incluye 10 000 neuronas diarias de Workers AI.</p></div>
+      <div class="tarjeta"><div class="ic">▯</div><h3>App Android</h3><p><a href="https://github.com/ReserchLab/lab-ia/releases/latest/download/lab.ia.apk">Descarga el APK</a> y pega la dirección de tu nube. Notificaciones al terminar y galería de imágenes.</p></div>
+      <div class="tarjeta"><div class="ic">⌨</div><h3>En el teléfono</h3><p>Todo local con Termux, Debian y FreeLLMAPI; accesible desde tu Wi-Fi con PIN. <a href="https://github.com/ReserchLab/lab-ia/blob/main/termux/LEEME.md">Instrucciones</a>.</p></div>
+    </div>
+    <ol class="pasos" style="margin-top:24px">
+      <li><div><b>Despliega</b> con el botón rojo. Cloudflare crea tu copia, la base de datos D1 y el almacén de imágenes.</div></li>
+      <li><div><b>Abre</b> <code>https://lab-ia.&lt;tu-subdominio&gt;.workers.dev</code> y crea tu cuenta: la primera es la de administrador.</div></li>
+      <li><div><b>Opcional:</b> en Ajustes → Modelos y proveedores añade claves gratis (Tavily para buscar en la web, Groq, Gemini…). Cada una trae su enlace.</div></li>
+      <li><div><b>En el móvil:</b> instala la app y pega tu dirección en «Mi nube».</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>API</h2>
+    <p class="h2-sub">Compatible con OpenAI. Tu clave está en Ajustes → Tu clave de API.</p>
+<pre>curl https://lab-ia.&lt;tu-subdominio&gt;.workers.dev/v1/chat/completions \
+  -H "Authorization: Bearer labia-…" -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"hola"}]}'</pre>
+  </section>
+
+  <section id="apoyar">
+    <div class="donar">
+      <h2>Apoya lab.ia</h2>
+      <p class="h2-sub">Es libre y lo seguirá siendo. Si te sirve, dale una estrella y compártelo.</p>
+      <p><a class="btn primario" href="https://github.com/ReserchLab/lab-ia">★ Dar una estrella en GitHub</a></p>
+      <p style="margin-top:28px">Donación en <b>USDC</b> (red <b>Arbitrum</b>, mínimo 5):</p>
+      <div class="dir" id="dir">0xAC43f9b0E7F0ae6386cfC8ef6BFf62CE9c3006A1</div>
+      <button class="btn" id="copiar" type="button">Copiar dirección</button>
+      <p style="margin:24px 0 4px;font-size:20px">¡Gracias!</p>
+      <p class="firma">Hecho xhumanx + IA</p>
+    </div>
+  </section>
+
+  <footer>LAB.IA · MIT · <a href="https://github.com/ReserchLab/lab-ia">github.com/ReserchLab/lab-ia</a></footer>
+</div>
+<script>
+  document.getElementById('copiar').addEventListener('click', async e => {
+    try { await navigator.clipboard.writeText(document.getElementById('dir').textContent.trim()); e.target.textContent = 'Copiada ✓'; }
+    catch { e.target.textContent = 'Selecciónala y cópiala'; }
+  });
+</script>
+</body>
+</html>

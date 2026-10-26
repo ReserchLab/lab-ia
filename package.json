@@ -1,0 +1,16 @@
+{
+  "name": "lab-ia",
+  "version": "1.4.0",
+  "private": true,
+  "description": "lab.ia: chat, investigación científica verificada e imágenes con IA. En tu Cloudflare o en tu teléfono.",
+  "type": "module",
+  "scripts": {
+    "build": "node nube/empaquetar-skills.mjs",
+    "deploy": "wrangler deploy",
+    "telefono": "node servidor/servidor.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.145.0"
+  },
+  "license": "MIT"
+}
