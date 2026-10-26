@@ -5,6 +5,8 @@
 <p align="center"><b>Chat, investigación científica verificada e imágenes con IA.</b><br>
 En tu propia cuenta de Cloudflare (gratis) o dentro de tu teléfono. Libre y sin publicidad.</p>
 
+<p align="center"><b><a href="https://lab-ia-demo.reserchlab.workers.dev">▶ Pruébalo sin registrarte</a></b> (versión de prueba: chat e investigación, con límites diarios)</p>
+
 <p align="center">
   <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/ReserchLab/lab-ia"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
 </p>
@@ -39,6 +41,9 @@ Todo corre en **tu** cuenta de Cloudflare: tus datos (D1), tus imágenes (KV), t
 4. En la app de Android, en *Mi nube*, pega tu dirección.
 
 <details><summary>Desplegar a mano con wrangler</summary>
+
+La versión de prueba abierta usa `wrangler.demo.jsonc` (`DEMO = "si"`: invitados sin registro, límites diarios, sin imágenes ni Workers AI).
+
 
 ```bash
 git clone https://github.com/ReserchLab/lab-ia && cd lab-ia

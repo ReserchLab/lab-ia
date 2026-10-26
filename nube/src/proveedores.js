@@ -101,7 +101,9 @@ async function aBytes(salida) {
 
 const tipoImagen = b => (b[0] === 0x89 ? 'image/png' : b[0] === 0x52 && b[8] === 0x57 ? 'image/webp' : 'image/jpeg');
 
-export function crearGateway(env, usuario) {
+// sinWorkersAI: la versión de prueba no usa Workers AI para no gastar las neuronas de la cuenta.
+export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
+  const sinWAI = m => (sinWorkersAI && m?.startsWith('workersai/') ? 'auto' : m);
   let filasClaves = null;
   const claves = new Map();
 
@@ -123,7 +125,7 @@ export function crearGateway(env, usuario) {
 
   async function disponibles() {
     const mias = await misClaves();
-    return CATALOGO.filter(p => (p.tipo || 'chat') === 'chat' && (p.sinClave || mias[p.id]));
+    return CATALOGO.filter(p => (p.tipo || 'chat') === 'chat' && (p.sinClave || mias[p.id]) && !(sinWorkersAI && p.id === 'workersai'));
   }
 
   // ── Listas de modelos (en caché 6 h en D1) ───────────────────────────────
@@ -179,9 +181,10 @@ export function crearGateway(env, usuario) {
 
   /** «auto» = varios en orden. Con un modelo concreto y sin `estricto`, el automático queda de respaldo. */
   async function candidatos(modelo, estricto = false) {
+    modelo = sinWAI(modelo);
     if (modelo && modelo !== 'auto' && estricto) return [modelo];
     const lista = (await modelosTexto()).filter(m => m.id !== 'auto');
-    let orden = [...new Set([...recomendados(lista, 'chat', 4).map(m => m.id), ...RESPALDO])];
+    let orden = [...new Set([...recomendados(lista, 'chat', 4).map(m => m.id), ...(sinWorkersAI ? [] : RESPALDO)])];
     if (await waiAgotado()) orden = [...orden.filter(m => !m.startsWith('workersai/')), ...orden.filter(m => m.startsWith('workersai/'))];
     return modelo && modelo !== 'auto' ? [modelo, ...orden.filter(m => m !== modelo)] : orden;
   }

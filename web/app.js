@@ -64,6 +64,7 @@
     $('#acceso').hidden = true;
     $('#app').hidden = false;
     marcarGateway(estado.gateway);
+    if (estado.demo) modoDemo(estado);
     const [skills, fuentes] = await Promise.all([api('/api/skills'), api('/api/fuentes')]);
     est.skills = skills;
     est.fuentes = fuentes;
@@ -76,6 +77,31 @@
     setInterval(async () => {
       try { marcarGateway((await api('/api/estado')).gateway); } catch { marcarGateway(false); }
     }, 30_000);
+  }
+
+  // Versión de prueba: aviso fijo, sin imágenes ni configuración.
+  function modoDemo(estado) {
+    est.demo = true;
+    if (!$('#banner-demo')) {
+      const b = document.createElement('div');
+      b.id = 'banner-demo';
+      b.className = 'banner-demo';
+      b.innerHTML = '<b>Versión de prueba</b> · <span id="uso-demo"></span> · <a href="https://labia-ciencia.pages.dev" target="_blank" rel="noopener">Crea tu propio lab.ia gratis →</a>';
+      $('.principal').insertBefore(b, $('#mensajes'));
+    }
+    const boton = document.querySelector('.modo[data-modo="imagen"]');
+    if (boton) boton.hidden = true;
+    if (prefs.modo === 'imagen') ponerModo('chat');
+    pintarUsoDemo(estado.uso);
+  }
+  function pintarUsoDemo(uso) {
+    if (!uso || !$('#uso-demo')) return;
+    const quedan = k => Math.max(0, uso[k].limite - uso[k].usados);
+    $('#uso-demo').textContent = `hoy te quedan ${quedan('chat')} mensajes y ${quedan('investigar')} investigaciones`;
+  }
+  async function refrescarUsoDemo() {
+    if (!est.demo) return;
+    try { pintarUsoDemo((await api('/api/estado')).uso); } catch { /* sin conexión */ }
   }
 
   function marcarGateway(ok) {
@@ -637,6 +663,7 @@
       actualizarMensaje(nodo, ma, true);
       seguir();
       cargarConversaciones();
+      refrescarUsoDemo();
       // En la nube la verificación va en otra petición (límite de subpeticiones de Cloudflare).
       if (verificarLuego && ma.id) {
         ponerEstado(verificarLuego.completa ? 'Verificando citas, enlaces y afirmaciones…' : 'Verificando citas y enlaces…');
@@ -696,7 +723,7 @@
         <span class="txt"><span class="nm">${esc(s.nombre)}</span><span class="ds">${esc(s.descripcion)}</span></span>
         ${s.modo !== 'chat' ? `<span class="tag-modo ${s.modo}">${MODOS[s.modo]}</span>` : ''}</button>`).join('');
     }
-    html += '<div class="fila-botones"><button class="btn" data-op="gestionar">◇ Gestionar skills</button><button class="btn" data-op="nueva">＋ Nueva skill</button></div>';
+    if (!est.demo) html += '<div class="fila-botones"><button class="btn" data-op="gestionar">◇ Gestionar skills</button><button class="btn" data-op="nueva">＋ Nueva skill</button></div>';
     abrirHoja('Skills', html, cuerpo => cuerpo.addEventListener('click', e => {
       const s = e.target.closest('[data-skill]');
       if (s) { aplicarSkill(s.dataset.skill); cerrarHoja(); return; }
@@ -955,16 +982,22 @@ curl ${esc(base)}/chat/completions \
         <p style="margin:12px 0 0">¡Gracias!</p>
         <p class="firma">Hecho xhumanx + IA</p>
       </div>`;
-    const html = `${e.nube ? cuenta : conexion}${termux}
+    const panelDemo = `<div class="panel">
+        <h3>Versión de prueba</h3>
+        <p style="margin:0 0 6px;font-size:14px">Estás usando lab.ia sin registrarte. Cada día puedes enviar ${e.limites?.chat ?? 20} mensajes y hacer ${e.limites?.investigar ?? 6} investigaciones. Tus conversaciones se borran a los 7 días.</p>
+        <p class="tenue" style="font-size:13px;margin:0">En tu propio lab.ia (gratis, en tu Cloudflare) no hay estos límites y tienes imágenes, memoria permanente, tus claves, modelos por tarea, tus skills y la API.</p>
+        <div class="fila-botones"><a class="btn chico rojo" href="https://labia-ciencia.pages.dev" target="_blank" rel="noopener">Crear mi lab.ia</a><a class="btn chico" href="/descargar">App Android</a></div>
+      </div>`;
+    const html = `${e.demo ? panelDemo : e.nube ? cuenta : conexion}${termux}
       <div class="panel">
         <h3>Preferencias</h3>
         <label class="casilla"><input type="checkbox" id="pref-razon"${prefs.razonamiento ? ' checked' : ''}><span>Mostrar el razonamiento del modelo<small>Cuando el modelo lo envía (p. ej. DeepSeek R1, Qwen QwQ)</small></span></label>
       </div>
-      <div class="panel">
+      ${e.demo ? '' : `<div class="panel">
         <h3>Modelos y proveedores</h3>
         <p class="tenue" style="font-size:13px;margin:0">Elige un modelo para cada tarea (investigar, código, razonamiento, imágenes…) y añade claves de proveedores con su enlace.</p>
         <div class="fila-botones"><button class="btn chico primario" data-op="modelos">◈ Configurar modelos</button><button class="btn chico" data-op="proveedores">⚿ Proveedores</button></div>
-      </div>
+      </div>`}
       ${e.nube ? `<div class="panel">
         <h3>En la nube</h3>
         <p style="margin:0;font-size:14px"><span style="color:var(--verde)">●</span> Cloudflare Workers · Workers AI incluido (10 000 neuronas al día gratis)</p>

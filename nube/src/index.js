@@ -9,6 +9,7 @@ import { SkillsD1 } from './skills.js';
 import { crearGateway } from './proveedores.js';
 import { manejarOpenAI } from './openai.js';
 import * as cuentas from './cuentas.js';
+import * as demo from './demo.js';
 
 const VERSION = '1.4.0';
 
@@ -26,7 +27,7 @@ function explicarNube(e) {
 }
 
 function contexto(env, usuario) {
-  const gateway = crearGateway(env, usuario.id);
+  const gateway = crearGateway(env, usuario.id, { sinWorkersAI: demo.esDemo(env) });
   const almacen = new AlmacenD1(env.DB, usuario.id);
   const skills = new SkillsD1(env.DB, usuario.id);
   const tareas = tareasD1(env.DB, usuario.id);
@@ -57,9 +58,23 @@ function respuestaSSE(ejecutar, request) {
   return { respuesta: new Response(readable, { headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' } }), tarea };
 }
 
-async function api(request, env, ctx, ruta) {
+async function api(request, env, ctx, ruta, invitado) {
   const metodo = request.method;
-  const cuerpo = async () => { try { return await request.json(); } catch { return {}; } };
+  let leido;
+  const cuerpo = async () => (leido ??= await request.json().catch(() => ({})));
+
+  // ── Versión de prueba: invitado automático, límites y rutas bloqueadas ──
+  if (demo.esDemo(env)) {
+    if (demo.rutaBloqueada(metodo, ruta)) return json({ error: 'No disponible en la versión de prueba. Crea tu propio lab.ia gratis: https://labia-ciencia.pages.dev' }, 403);
+    if (ruta === '/api/estado' && metodo === 'GET') {
+      return json({ version: VERSION, nube: true, demo: true, autorizado: true, local: false, gateway: true, usuario: { email: 'invitado', rol: 'invitado' }, uso: await demo.uso(env, invitado.id), limites: demo.LIMITES, repo: env.REPO });
+    }
+    if (ruta === '/api/chat' && metodo === 'POST') {
+      const p = await cuerpo();
+      if (p.modo === 'imagen') return json({ error: 'Las imágenes no están en la versión de prueba. En tu propio lab.ia sí: https://labia-ciencia.pages.dev' }, 403);
+      if (!p.regenerar || p.conversacion) await demo.consumir(env, request, invitado.id, p.modo);
+    }
+  }
 
   // ── Cuenta (sin sesión) ──
   if (ruta === '/api/estado' && metodo === 'GET') {
@@ -87,7 +102,7 @@ async function api(request, env, ctx, ruta) {
     return json({ ok: true }, 200, { 'Set-Cookie': cuentas.galletaBorrada() });
   }
 
-  const usuario = await cuentas.usuarioDeSesion(env, request);
+  const usuario = invitado || await cuentas.usuarioDeSesion(env, request);
   if (!usuario) return json({ error: 'Inicia sesión en lab.ia' }, 401);
   const c = contexto(env, usuario);
 
@@ -132,9 +147,16 @@ export default {
     try {
       await asegurarEsquema(env.DB);
 
-      if (ruta.startsWith('/api/')) return await api(request, env, ctx, ruta);
+      if (ruta.startsWith('/api/')) {
+        if (!demo.esDemo(env)) return await api(request, env, ctx, ruta);
+        const { usuario, galleta } = await demo.asegurarInvitado(env, request);
+        const r = await api(request, env, ctx, ruta, usuario);
+        if (galleta) r.headers.append('Set-Cookie', galleta);
+        return r;
+      }
 
       if (ruta.startsWith('/v1/')) {
+        if (demo.esDemo(env)) return json({ error: { message: 'La API no está en la versión de prueba', type: 'invalid_request_error' } }, 404);
         if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST' } });
         const usuario = await cuentas.usuarioDeClave(env, request);
         if (!usuario) return json({ error: { message: 'Clave de lab.ia no válida (labia-…)', type: 'authentication_error' } }, 401);

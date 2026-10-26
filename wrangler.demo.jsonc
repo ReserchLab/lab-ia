@@ -1,0 +1,17 @@
+{
+  // Versión de prueba abierta (sin registro, con límites, sin Workers AI): npx wrangler deploy -c wrangler.demo.jsonc
+  "$schema": "https://unpkg.com/wrangler@4.145.0/config-schema.json",
+  "name": "lab-ia-demo",
+  "main": "nube/src/index.js",
+  "compatibility_date": "2026-10-01",
+  "build": { "command": "node nube/empaquetar-skills.mjs" },
+  "assets": { "directory": "./web", "binding": "ASSETS" },
+  "ai": { "binding": "AI" },
+  "d1_databases": [{ "binding": "DB", "database_name": "lab-ia-demo" }],
+  "kv_namespaces": [{ "binding": "MEDIA" }],
+  "vars": {
+    "REPO": "https://github.com/ReserchLab/lab-ia",
+    "DEMO": "si"
+  },
+  "observability": { "enabled": true }
+}

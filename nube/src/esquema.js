@@ -1,5 +1,5 @@
 // Esquema de D1. Se crea solo la primera vez que el Worker arranca (no hace falta aplicar migraciones).
-const VERSION = '1';
+const VERSION = '2';
 const SQL = [
   `CREATE TABLE IF NOT EXISTS ajustes (usuario TEXT NOT NULL, clave TEXT NOT NULL, valor TEXT NOT NULL, PRIMARY KEY (usuario, clave))`,
   `CREATE TABLE IF NOT EXISTS usuarios (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, hash TEXT NOT NULL, sal TEXT NOT NULL, rol TEXT NOT NULL DEFAULT 'usuario', clave_hash TEXT UNIQUE, clave_cifrada TEXT, clave_iv TEXT, creado INTEGER NOT NULL)`,
@@ -11,6 +11,7 @@ const SQL = [
   `CREATE INDEX IF NOT EXISTS mensajes_conv ON mensajes (conversacion, creado)`,
   `CREATE TABLE IF NOT EXISTS skills (usuario TEXT NOT NULL, id TEXT NOT NULL, md TEXT NOT NULL, actualizada INTEGER NOT NULL, PRIMARY KEY (usuario, id))`,
   `CREATE TABLE IF NOT EXISTS cache (clave TEXT PRIMARY KEY, valor TEXT NOT NULL, expira INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS cuotas (clave TEXT PRIMARY KEY, n INTEGER NOT NULL, expira INTEGER NOT NULL)`,
 ];
 
 let listo = false;
