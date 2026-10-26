@@ -8,8 +8,26 @@ android {
         applicationId 'com.cardon.lab'
         minSdk 24
         targetSdk 34
-        versionCode 3
-        versionName '1.2.0'
+        versionCode 4
+        versionName '1.2.1'
+    }
+    buildFeatures { buildConfig true }
+    // «publica»: la que se comparte; arranca buscando el servidor en este teléfono (Termux).
+    // «personal»: abre directamente tu nube; la dirección sale de android/personal.properties (no se versiona):
+    //   servidor=https://lab-ia.<tu-subdominio>.workers.dev
+    flavorDimensions 'edicion'
+    productFlavors {
+        publica {
+            dimension 'edicion'
+            buildConfigField 'String', 'SERVIDOR_INICIAL', '"http://127.0.0.1:8790"'
+        }
+        personal {
+            dimension 'edicion'
+            def props = new Properties()
+            def archivo = rootProject.file('personal.properties')
+            if (archivo.exists()) archivo.withInputStream { props.load(it) }
+            buildConfigField 'String', 'SERVIDOR_INICIAL', "\"${props.getProperty('servidor', 'http://127.0.0.1:8790')}\""
+        }
     }
     buildTypes {
         // ./gradlew assembleRelease -PfirmaLocal la firma con la llave de depuración de este equipo.

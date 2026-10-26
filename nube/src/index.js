@@ -149,6 +149,13 @@ export default {
         return new Response(value, { headers: { 'Content-Type': metadata.tipo || 'image/png', 'Cache-Control': 'private, max-age=31536000, immutable' } });
       }
 
+      // APK privado (edición personal): solo con el código secreto APK_CODIGO, guardado en KV como «apk-personal».
+      if (env.APK_CODIGO && ruta === `/apk/${env.APK_CODIGO}`) {
+        const apk = await env.MEDIA.get('apk-personal', { type: 'stream' });
+        if (!apk) return json({ error: 'No hay APK personal subido' }, 404);
+        return new Response(apk, { headers: { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Disposition': 'attachment; filename="lab.ia-personal.apk"', 'Cache-Control': 'no-store' } });
+      }
+
       // El APK se publica en GitHub Releases.
       if (ruta === '/descargar' || ruta === '/lab.ia.apk') return Response.redirect(`${env.REPO}/releases/latest/download/lab.ia.apk`, 302);
 

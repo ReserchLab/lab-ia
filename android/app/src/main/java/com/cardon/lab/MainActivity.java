@@ -114,6 +114,7 @@ public class MainActivity extends Activity {
         setContentView(web, new ViewGroup.LayoutParams(-1, -1));
         crearCanal();
         pedirPermisos();
+        aplicarServidorInicial();
         conectar();
     }
 
@@ -160,7 +161,15 @@ public class MainActivity extends Activity {
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(idAviso++, b.build());
     }
 
-    String servidor() { return prefs.getString("servidor", LOCAL); }
+    String servidor() { return prefs.getString("servidor", BuildConfig.SERVIDOR_INICIAL); }
+
+    /** La edición personal abre su nube aunque antes se usara otro servidor (una sola vez; luego manda el usuario). */
+    void aplicarServidorInicial() {
+        String inicial = BuildConfig.SERVIDOR_INICIAL;
+        String marca = "inicial:" + inicial;
+        if (inicial.equals(LOCAL) || prefs.getBoolean(marca, false)) return;
+        prefs.edit().putString("servidor", inicial).putBoolean(marca, true).apply();
+    }
 
     /** Muestra la pantalla de conexión y prueba el servidor guardado; si responde, lo abre. */
     void conectar() {
@@ -359,7 +368,7 @@ public class MainActivity extends Activity {
     class Puente {
         @JavascriptInterface public String servidor() { return MainActivity.this.servidor(); }
         @JavascriptInterface public String estado() { return prefs.getString("estado", "probando"); }
-        @JavascriptInterface public String version() { return "1.2.0"; }
+        @JavascriptInterface public String version() { return BuildConfig.VERSION_NAME; }
 
         @JavascriptInterface public void notificar(String titulo, String texto) { MainActivity.this.notificar(titulo, texto); }
         @JavascriptInterface public String permisos() {
