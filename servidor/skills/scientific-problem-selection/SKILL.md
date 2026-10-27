@@ -10,7 +10,7 @@ tarea: razonamiento
 categoria: Ciencia
 ---
 
-> Nota de lab.ia: aquí no puedes ejecutar los scripts ni leer archivos que mencione esta skill. Cuando haga falta, entrega el código completo para que el usuario lo ejecute (por ejemplo en Termux o Notebook Studio) y explica qué resultado esperar.
+> Nota de laboratorio.ia: aquí no puedes ejecutar los scripts ni leer archivos que mencione esta skill. Cuando haga falta, entrega el código completo para que el usuario lo ejecute (por ejemplo en Termux o Notebook Studio) y explica qué resultado esperar.
 
 # Scientific Problem Selection Skills
 

@@ -8,7 +8,7 @@ const ENLACES = [
   '/root/freellmapi/client/src/components/keys/shared.tsx',
   '/root/freellmapi/client/src/lib/search.ts',
 ];
-// Claves gratis que más mejoran lab.ia, con el motivo.
+// Claves gratis que más mejoran laboratorio.ia, con el motivo.
 const RECOMENDADOS = {
   tavily: 'Búsqueda web (1000 gratis al mes): el catálogo gratuito no trae buscador sin clave',
   groq: 'Texto muy rápido y gratis',
@@ -45,7 +45,7 @@ export class Proveedores {
   async tablero(ruta, metodo = 'GET', cuerpo) {
     const res = await this.gateway.pedir(ruta, { metodo, cuerpo, tablero: true, tiempo: 60_000 });
     const datos = await res.json().catch(() => ({}));
-    // Un 401 del dashboard (sesión caducada, contraseña mal) no es el PIN de lab.ia: se devuelve como 400.
+    // Un 401 del dashboard (sesión caducada, contraseña mal) no es el PIN de laboratorio.ia: se devuelve como 400.
     if (!res.ok) throw Object.assign(new Error(datos?.error?.message || `FreeLLMAPI respondió ${res.status}`), { estado: res.status === 401 ? 400 : res.status });
     return datos;
   }
@@ -105,7 +105,7 @@ export class Proveedores {
 
   /** Guarda la clave y la comprueba con el chequeo de salud del gateway. */
   async agregar(plataforma, clave) {
-    // lab.ia usa la clave de Pollinations directamente para las imágenes (FLUX real, sin marca de agua).
+    // laboratorio.ia usa la clave de Pollinations directamente para las imágenes (FLUX real, sin marca de agua).
     if (plataforma === 'pollinations') guardarEnConfig('POLLINATIONS_API_KEY', clave);
     // Google también sirve para las imágenes Nano Banana (de pago, opcional).
     if (plataforma === 'google') guardarEnConfig('GOOGLE_API_KEY', clave);

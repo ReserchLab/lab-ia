@@ -1,7 +1,7 @@
 // Red de la nube para comun/fuentes y comun/verificacion (fetch de Workers).
 import { configurarRed } from '../../comun/red.mjs';
 
-const UA = 'Mozilla/5.0 (compatible; lab.ia/1.4; +https://github.com/ReserchLab/lab-ia)';
+const UA = 'Mozilla/5.0 (compatible; laboratorio.ia/1.4; +https://github.com/ReserchLab/lab-ia)';
 // Plan gratuito: 10 ms de CPU por petición. Analizar páginas enormes no cabe, así que se leen
 // como mucho 150 KB de HTML (de sobra para el resumen y los primeros párrafos).
 const MAX_HTML = 150_000;

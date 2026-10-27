@@ -81,6 +81,28 @@ export class Almacen {
     if (ultimo?.rol === 'assistant') this.db.prepare('DELETE FROM mensajes WHERE id = ?').run(ultimo.id);
   }
 
+  /** Borra un mensaje y todos los que le siguen (editar una pregunta anterior). Devuelve los borrados. */
+  truncarDesde(conversacion, mensaje) {
+    const lista = this.mensajes(conversacion);
+    const i = lista.findIndex(m => m.id === mensaje);
+    if (i < 0) return null;
+    const borrados = lista.slice(i);
+    const borrar = this.db.prepare('DELETE FROM mensajes WHERE id = ?');
+    for (const m of borrados) borrar.run(m.id);
+    if (this.memoria(conversacion).memoria_hasta > i) this.guardarMemoria(conversacion, '', 0); // resumía mensajes que ya no existen
+    return { indice: i, borrados: borrados.map(m => ({ ...m, meta: JSON.parse(m.meta) })) };
+  }
+
+  /** Todas las conversaciones con sus mensajes (exportar datos de entrenamiento). */
+  exportable() {
+    const convs = new Map();
+    for (const m of this.db.prepare('SELECT m.conversacion, m.id, m.rol, m.contenido, m.meta FROM mensajes m JOIN conversaciones c ON c.id = m.conversacion ORDER BY c.creada, m.conversacion, m.creado, m.rowid').all()) {
+      if (!convs.has(m.conversacion)) convs.set(m.conversacion, { id: m.conversacion, mensajes: [] });
+      convs.get(m.conversacion).mensajes.push(m);
+    }
+    return [...convs.values()];
+  }
+
   renombrar(id, titulo) {
     this.db.prepare('UPDATE conversaciones SET titulo = ? WHERE id = ?').run(titulo, id);
   }

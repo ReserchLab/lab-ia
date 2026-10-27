@@ -1,4 +1,4 @@
-// lab.ia — cliente web (sin frameworks).
+// laboratorio.ia — cliente web (sin frameworks).
 (function () {
   'use strict';
 
@@ -9,12 +9,23 @@
   // ── Preferencias del dispositivo ─────────────────────────────────────────
   const PREF = 'cardon-lab:prefs';
   const prefs = Object.assign(
-    { modo: 'chat', skill: 'asistente-general', modeloTexto: 'auto', modeloImagen: 'auto', tamano: 'cuadrado', fuentes: null, razonamiento: true,
+    { tema: 'oscuro', modo: 'chat', skill: 'asistente-general', modeloTexto: 'auto', modeloImagen: 'auto', tamano: 'cuadrado', fuentes: null, razonamiento: true,
       combinar: { activa: false, modelos: [], integrador: 'auto', mostrar: true } },
     leerPrefs(),
   );
   function leerPrefs() { try { return JSON.parse(localStorage.getItem(PREF)) || {}; } catch { return {}; } }
   function guardarPrefs() { try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch { /* sin almacenamiento */ } }
+
+  // ── Tema: noche (por defecto), día o el del sistema ─────────────────────
+  const claroDelSistema = window.matchMedia('(prefers-color-scheme: light)');
+  function aplicarTema() {
+    const t = prefs.tema === 'sistema' ? (claroDelSistema.matches ? 'claro' : 'oscuro') : prefs.tema === 'claro' ? 'claro' : 'oscuro';
+    document.documentElement.dataset.tema = t;
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'claro' ? '#f5f5f2' : '#000000');
+    try { app?.tema?.(t); } catch { /* APK antiguo sin este puente */ }
+  }
+  claroDelSistema.addEventListener?.('change', () => { if (prefs.tema === 'sistema') aplicarTema(); });
+  aplicarTema();
 
   const est = {
     skills: [], fuentes: [], modelos: { texto: [], imagen: [] }, conversaciones: [], tareas: [],
@@ -96,7 +107,7 @@
       const b = document.createElement('div');
       b.id = 'banner-demo';
       b.className = 'banner-demo';
-      b.innerHTML = '<b>Versión de prueba</b> · <span id="uso-demo"></span> · <a href="https://labia-ciencia.pages.dev" target="_blank" rel="noopener">Crea tu propio lab.ia gratis →</a>';
+      b.innerHTML = '<b>Versión de prueba</b> · <span id="uso-demo"></span> · <a href="https://labia-ciencia.pages.dev" target="_blank" rel="noopener">Crea tu propio laboratorio.ia gratis →</a>';
       $('.principal').insertBefore(b, $('#mensajes'));
     }
     const boton = document.querySelector('.modo[data-modo="imagen"]');
@@ -140,8 +151,8 @@
   function pintarCuenta(estado = est.estadoServidor) {
     const registro = modoCuenta === 'registro';
     $('#acceso-texto').textContent = !estado?.hayUsuarios
-      ? 'Crea la cuenta de administrador de este lab.ia. Será la única hasta que abras el registro en Ajustes.'
-      : registro ? 'Crea tu cuenta en este lab.ia.' : 'Entra con tu cuenta de lab.ia.';
+      ? 'Crea la cuenta de administrador de este laboratorio.ia. Será la única hasta que abras el registro en Ajustes.'
+      : registro ? 'Crea tu cuenta en este laboratorio.ia.' : 'Entra con tu cuenta de laboratorio.ia.';
     $('#cuenta-boton').textContent = registro ? 'Crear cuenta' : 'Entrar';
     $('#cuenta-pass').autocomplete = registro ? 'new-password' : 'current-password';
     const cambiar = $('#cuenta-cambiar');
@@ -475,6 +486,13 @@
     }
     const vf = e.target.closest('[data-verif]');
     if (vf) verificarDeNuevo(vf.closest('.msg'), vf.dataset.verif);
+    const pr = e.target.closest('[data-preferir]');
+    if (pr) {
+      const div = pr.closest('.msg');
+      const m = est.mensajes.find(x => x.id === div.dataset.id);
+      const k = Number(pr.dataset.preferir);
+      if (m) valorar(m, div, { preferido: m.meta.preferido === k ? -1 : k });
+    }
   });
 
   $('#mensajes').addEventListener('change', async e => {
@@ -501,13 +519,15 @@
     div.className = `msg ${m.rol}`;
     div.dataset.id = m.id || '';
     if (m.rol === 'user') {
-      div.innerHTML = `<div class="burbuja">${esc(m.contenido)}</div>`;
+      div.innerHTML = `<div class="burbuja">${esc(m.contenido)}</div>
+        <div class="acciones-msg acciones-usuario"><button data-acc="editar" title="Editar y volver a enviar">✎ editar</button><button data-acc="copiar">copiar</button></div>`;
+      if (m.meta?.edicion) div.querySelector('.acciones-usuario').insertAdjacentHTML('afterbegin', '<span class="editado" title="Editaste esta pregunta">editada</span>');
       return div;
     }
     const meta = m.meta || {};
     const sk = est.skills.find(s => s.id === meta.skill);
     div.innerHTML = `
-      <div class="etiqueta-msg"><span class="punto"></span>${esc(sk ? sk.nombre : 'lab.ia')}${meta.modo && meta.modo !== 'chat' ? ' · ' + MODOS[meta.modo] : ''}${meta.combinacion ? ` · ⧉ ${meta.combinacion.respuestas.length} modelos integrados` : ''}</div>
+      <div class="etiqueta-msg"><span class="punto"></span>${esc(sk ? sk.nombre : 'laboratorio.ia')}${meta.modo && meta.modo !== 'chat' ? ' · ' + MODOS[meta.modo] : ''}${meta.combinacion ? ` · ⧉ ${meta.combinacion.respuestas.length} modelos integrados` : ''}</div>
       <div class="estado" hidden><span class="matriz">${'<i></i>'.repeat(9)}</span><span class="estado-texto"></span></div>
       <details class="razon" hidden><summary>Razonamiento</summary><div class="razon-texto"></div></details>
       <details class="fuentes" hidden><summary>Fuentes</summary><div class="consultas"></div><div class="lista-fuentes"></div><div class="fallos"></div></details>
@@ -569,6 +589,8 @@
         ${m.contenido ? '<button data-acc="copiar">copiar</button>' : ''}
         ${meta.imagenes?.length ? '<button data-acc="guardar">guardar</button>' : ''}
         ${esUltimo ? '<button data-acc="regenerar">regenerar</button>' : ''}
+        ${m.id && (m.contenido || meta.imagenes?.length) ? `<button data-acc="bien" class="valorar${meta.valoracion === 1 ? ' activo' : ''}" title="Buena respuesta (sirve para entrenar tu modelo)" aria-label="Buena respuesta">▲</button><button data-acc="mal" class="valorar${meta.valoracion === -1 ? ' activo mal' : ''}" title="Mala respuesta" aria-label="Mala respuesta">▼</button>` : ''}
+        ${meta.descartadas?.length ? `<span class="tenue" style="font:11px var(--mono)" title="Respuestas anteriores guardadas como peores">↻${meta.descartadas.length}</span>` : ''}
         ${meta.modelo ? `<span class="modelo-usado" title="${esc(meta.modelo)}">${esc(meta.modelo)}</span>` : ''}`;
     }
   }
@@ -587,9 +609,12 @@
     d.querySelector('summary').textContent = `⧉ Respuestas por modelo · ${ok}/${c.respuestas.length}${c.integrador ? ` · integradas por ${corto(c.integrador)}` : ''}`;
     d.querySelector('.pestanas').innerHTML = c.respuestas.map((r, i) => `<button class="pestana${i === sel ? ' activa' : ''}" data-pestana="${i}"><span class="pt ${r.error ? 'mal' : r.escribiendo ? 'esc' : 'ok'}"></span>${esc(corto(r.modelo))}</button>`).join('');
     const r = c.respuestas[sel];
-    d.querySelector('.panel-modelo').innerHTML = r.error && !r.texto
+    const preferido = m.meta.preferido;
+    d.querySelector('.pestanas').querySelectorAll('[data-pestana]').forEach(b => { if (Number(b.dataset.pestana) === preferido) b.insertAdjacentHTML('beforeend', ' ★'); });
+    d.querySelector('.panel-modelo').innerHTML = (r.error && !r.texto
       ? `<p class="mal">${esc(r.error)}</p>`
-      : window.renderMd(r.texto || '…', m.meta.fuentes) + (r.error ? `<p class="mal">${esc(r.error)}</p>` : '');
+      : window.renderMd(r.texto || '…', m.meta.fuentes) + (r.error ? `<p class="mal">${esc(r.error)}</p>` : ''))
+      + (m.id && r.texto && !r.error ? `<div class="fila-botones"><button class="btn chico${preferido === sel ? ' rojo' : ''}" data-preferir="${sel}">${preferido === sel ? '★ Elegida como la mejor' : '☆ Esta fue la mejor'}</button></div>` : '');
   }
 
   const VEREDICTO = { respaldada: ['ok', '✓ respaldada'], parcial: ['medio', '! parcial'], no_respaldada: ['mal', '✗ no respaldada'], sin_cita: ['mal', '✗ sin cita'] };
@@ -644,10 +669,59 @@
   }
 
   function accionMensaje(acc, div) {
-    const m = est.mensajes.find(x => x.id === div.dataset.id) || est.mensajes[est.mensajes.length - 1];
+    const m = (div.dataset.id && est.mensajes.find(x => x.id === div.dataset.id)) || est.mensajes[est.mensajes.length - 1];
     if (acc === 'copiar') copiar(m.contenido);
     if (acc === 'guardar') guardarImagen(m.meta.imagenes[0]);
     if (acc === 'regenerar') enviar({ regenerar: true });
+    if (acc === 'editar') editarPregunta(div, m);
+    if (acc === 'bien' || acc === 'mal') {
+      const v = acc === 'bien' ? 1 : -1;
+      valorar(m, div, { valor: m.meta.valoracion === v ? 0 : v });
+    }
+  }
+
+  /** 👍/👎 y «la mejor» de una combinación: señales para entrenar tu propio modelo. */
+  async function valorar(m, div, cambios) {
+    if (!m.id) return;
+    try {
+      const r = await api(`/api/mensajes/${m.id}/valoracion`, { metodo: 'PATCH', cuerpo: cambios });
+      m.meta.valoracion = r.valoracion;
+      m.meta.preferido = r.preferido;
+      actualizarMensaje(div, m, true);
+      if (cambios.valor === -1) aviso('Anotado. Puedes regenerar o editar la pregunta para mejorarla.');
+    } catch (err) { aviso(err.message); }
+  }
+
+  /** Convierte la burbuja en un editor; al enviar se borra desde esa pregunta y se responde de nuevo. */
+  function editarPregunta(div, m) {
+    if (est.enviando) { aviso('Espera a que termine la respuesta'); return; }
+    if (!m.id) { aviso('Esta pregunta aún se está guardando'); return; }
+    if (div.querySelector('.editor-msg')) return;
+    const posteriores = est.mensajes.length - est.mensajes.indexOf(m) - 1;
+    div.classList.add('editando');
+    div.insertAdjacentHTML('beforeend', `<div class="editor-msg">
+      <textarea rows="3" aria-label="Editar pregunta"></textarea>
+      <p class="tenue">${posteriores > 1 ? `Se reemplazarán las ${posteriores} respuestas y mensajes que siguen.` : 'Se reemplazará la respuesta.'} La versión anterior se guarda para entrenar tu modelo.</p>
+      <div class="fila-botones"><button class="btn chico" data-editor="cancelar">Cancelar</button><button class="btn chico primario" data-editor="enviar">Enviar de nuevo</button></div>
+    </div>`);
+    const ta = div.querySelector('.editor-msg textarea');
+    ta.value = m.contenido;
+    ta.style.height = Math.min(ta.scrollHeight + 4, window.innerHeight * 0.4) + 'px';
+    ta.focus();
+    div.querySelector('.editor-msg').addEventListener('click', ev => {
+      const op = ev.target.closest('[data-editor]')?.dataset.editor;
+      if (!op) return;
+      ev.stopPropagation();
+      if (op === 'cancelar') { div.querySelector('.editor-msg').remove(); div.classList.remove('editando'); return; }
+      const nuevo = ta.value.trim();
+      if (!nuevo) return;
+      // Quita de la vista esta pregunta y todo lo que sigue; el servidor hace lo mismo.
+      const i = est.mensajes.indexOf(m);
+      est.mensajes.splice(i);
+      let n = div;
+      while (n) { const sig = n.nextElementSibling; n.remove(); n = sig; }
+      enviar({ editar: m.id, contenido: nuevo });
+    });
   }
 
   function copiar(texto) {
@@ -682,8 +756,8 @@
       : '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
 
-  async function enviar({ regenerar = false } = {}) {
-    const contenido = texto.value.trim();
+  async function enviar({ regenerar = false, editar = null, contenido: editado = null } = {}) {
+    const contenido = editado ?? texto.value.trim();
     if (!regenerar && !contenido) return;
     if (est.enviando) return;
     const cont = $('#mensajes');
@@ -693,11 +767,10 @@
       const ultimo = est.mensajes[est.mensajes.length - 1];
       if (ultimo?.rol === 'assistant') { est.mensajes.pop(); cont.lastElementChild?.remove(); }
     } else {
-      const mu = { rol: 'user', contenido, meta: {} };
+      var mu = { rol: 'user', contenido, meta: editar ? { edicion: {} } : {} };
       est.mensajes.push(mu);
       cont.appendChild(nodoMensaje(mu));
-      texto.value = '';
-      ajustarAltura();
+      if (!editar) { texto.value = ''; ajustarAltura(); }
       $('#recomendacion').hidden = true;
     }
 
@@ -730,7 +803,7 @@
         credentials: 'same-origin',
         signal: ctl.signal,
         body: JSON.stringify({
-          conversacion: est.conv, texto: contenido, regenerar, modo: prefs.modo, skill: prefs.skill,
+          conversacion: est.conv, texto: contenido, regenerar, editar: editar || undefined, modo: prefs.modo, skill: prefs.skill,
           modelo: prefs.modeloTexto, modeloImagen: prefs.modeloImagen, tamano: prefs.tamano,
           estilo: estiloActual(), calidad: ['alta', 'premium'].includes(prefs.calidad) ? prefs.calidad : 'rapida',
           combinar: prefs.modo !== 'imagen' && prefs.combinar?.activa && prefs.combinar.modelos.length >= 2
@@ -762,6 +835,7 @@
           const d = JSON.parse(dato);
           if (ev === 'inicio') {
             if (!est.conv) { est.conv = d.conversacion; cargarConversaciones(); }
+            if (d.mensajeUsuario && mu) { mu.id = d.mensajeUsuario; cont.querySelectorAll('.msg.user:not([data-id]), .msg.user[data-id=""]').forEach(n => { n.dataset.id = d.mensajeUsuario; }); }
           } else if (ev === 'estado') {
             ponerEstado(d.texto);
           } else if (ev === 'fuentes') {
@@ -800,7 +874,7 @@
         }
       }
     } catch (err) {
-      if (err.name !== 'AbortError') ma.error = err.message === 'Failed to fetch' ? 'Se perdió la conexión con lab.ia.' : err.message;
+      if (err.name !== 'AbortError') ma.error = err.message === 'Failed to fetch' ? 'Se perdió la conexión con laboratorio.ia.' : err.message;
       else if (!ma.contenido) ma.error = 'Detenido.';
     } finally {
       est.enviando = null;
@@ -829,7 +903,7 @@
   function avisarFin(m, pregunta) {
     if (!document.hidden || !app?.notificar) return;
     const sk = est.skills.find(s => s.id === m.meta.skill);
-    const titulo = m.error ? 'lab.ia · error' : m.meta.imagenes ? 'lab.ia · imagen lista' : m.meta.fuentes ? `lab.ia · investigación lista (${m.meta.fuentes.length} fuentes)` : `lab.ia · ${sk ? sk.nombre : 'respuesta lista'}`;
+    const titulo = m.error ? 'laboratorio.ia · error' : m.meta.imagenes ? 'laboratorio.ia · imagen lista' : m.meta.fuentes ? `laboratorio.ia · investigación lista (${m.meta.fuentes.length} fuentes)` : `laboratorio.ia · ${sk ? sk.nombre : 'respuesta lista'}`;
     const plano = (m.error || m.contenido || m.meta.prompt || pregunta || '').replace(/[#*_`>|[\]]/g, '').replace(/\s+/g, ' ').trim();
     app.notificar(titulo, plano.slice(0, 240) || 'Toca para verla');
   }
@@ -1081,7 +1155,7 @@
           ${wifi.map(d => `<div class="direccion"><small>${esc(d.tipo)}</small><code>${esc(d.url)}</code></div>`).join('')}
           <div class="qr">${qrSvg(wifi[0].url)}</div>
           <p class="tenue" style="font-size:13px;margin:6px 0 0">Para instalar la app en otro teléfono: <code>${esc(wifi[0].url)}/descargar</code></p>`
-          : '<p class="tenue" style="font-size:13px">Este teléfono no está en una red Wi-Fi ni compartiendo punto de acceso. Conéctalo a una Wi-Fi para usar lab.ia desde otros equipos.</p>'}
+          : '<p class="tenue" style="font-size:13px">Este teléfono no está en una red Wi-Fi ni compartiendo punto de acceso. Conéctalo a una Wi-Fi para usar laboratorio.ia desde otros equipos.</p>'}
         <p style="margin:10px 0 0">PIN: <span class="pin-grande">${esc(e.pin)}</span></p>
         <div class="fila-botones"><button class="btn chico" data-op="nuevo-pin">Cambiar PIN y cerrar sesiones</button></div>
       </div>` : '<div class="panel"><h3>Conexión</h3><p class="tenue" style="font-size:13px;margin:0">Estás conectado desde otro equipo de la red.</p></div>';
@@ -1098,7 +1172,7 @@
       </div>
       <div class="panel">
         <h3>Tu clave de API (compatible con OpenAI)</h3>
-        <p class="tenue" style="font-size:13px;margin:0 0 8px">Usa tus modelos de lab.ia desde Codex, Cline, el SDK de OpenAI o cualquier programa compatible.</p>
+        <p class="tenue" style="font-size:13px;margin:0 0 8px">Usa tus modelos de laboratorio.ia desde Codex, Cline, el SDK de OpenAI o cualquier programa compatible.</p>
         <div class="clave-api"><code id="clave-api" data-clave="${esc(c.clave || '')}">${esc(c.clave ? c.clave.slice(0, 12) + '…' : '')}</code><button class="btn chico" data-op="ver-clave">Ver</button><button class="btn chico" data-op="copiar-clave">Copiar</button></div>
         <pre class="codigo-uso">base_url = ${esc(base)}
 api_key  = labia-…
@@ -1132,7 +1206,7 @@ curl ${esc(base)}/chat/completions \
       </div>`;
     }
     const proyecto = `<div class="panel donar">
-        <h3>lab.ia es libre</h3>
+        <h3>laboratorio.ia es libre</h3>
         <p style="font-size:14px;margin:4px 0">Si te sirve, dale una ★ en GitHub y compártelo.</p>
         <div class="fila-botones" style="justify-content:center">
           <a class="btn chico" href="${esc(e.repo || 'https://github.com/ReserchLab/lab-ia')}" target="_blank" rel="noopener">★ GitHub</a>
@@ -1146,11 +1220,22 @@ curl ${esc(base)}/chat/completions \
       </div>`;
     const panelDemo = `<div class="panel">
         <h3>Versión de prueba</h3>
-        <p style="margin:0 0 6px;font-size:14px">Estás usando lab.ia sin registrarte. Cada día puedes enviar ${e.limites?.chat ?? 20} mensajes y hacer ${e.limites?.investigar ?? 6} investigaciones. Tus conversaciones se borran a los 7 días.</p>
-        <p class="tenue" style="font-size:13px;margin:0">En tu propio lab.ia (gratis, en tu Cloudflare) no hay estos límites y tienes imágenes, memoria permanente, tus claves, modelos por tarea, tus skills y la API.</p>
-        <div class="fila-botones"><a class="btn chico rojo" href="https://labia-ciencia.pages.dev" target="_blank" rel="noopener">Crear mi lab.ia</a><a class="btn chico" href="/descargar">App Android</a></div>
+        <p style="margin:0 0 6px;font-size:14px">Estás usando laboratorio.ia sin registrarte. Cada día puedes enviar ${e.limites?.chat ?? 20} mensajes y hacer ${e.limites?.investigar ?? 6} investigaciones. Tus conversaciones se borran a los 7 días.</p>
+        <p class="tenue" style="font-size:13px;margin:0">En tu propio laboratorio.ia (gratis, en tu Cloudflare) no hay estos límites y tienes imágenes, memoria permanente, tus claves, modelos por tarea, tus skills y la API.</p>
+        <div class="fila-botones"><a class="btn chico rojo" href="https://labia-ciencia.pages.dev" target="_blank" rel="noopener">Crear mi laboratorio.ia</a><a class="btn chico" href="/descargar">App Android</a></div>
       </div>`;
     const html = `${e.demo ? panelDemo : e.nube ? cuenta : conexion}${termux}
+      <div class="panel">
+        <h3>Apariencia</h3>
+        <div class="selector-tema" role="radiogroup" aria-label="Tema">
+          ${[['oscuro', '●', 'Noche'], ['claro', '○', 'Día'], ['sistema', '◐', 'Sistema']].map(([id, ic, nom]) => `<button role="radio" aria-checked="${prefs.tema === id}" class="opcion-tema${prefs.tema === id ? ' activa' : ''}" data-tema="${id}"><span class="muestra muestra-${id}">${ic}</span>${nom}${id === 'oscuro' ? '<small>por defecto</small>' : ''}</button>`).join('')}
+        </div>
+      </div>
+      ${e.demo ? '' : `<div class="panel">
+        <h3>Entrenar tu propio modelo</h3>
+        <p class="tenue" style="font-size:13px;margin:0">Tus valoraciones ▲▼, las respuestas que regeneras, las preguntas que editas y la mejor de cada combinación de modelos se convierten en datos para ajustar un modelo con tu forma de investigar.</p>
+        <div class="fila-botones"><button class="btn chico primario" data-op="entrenar">✦ Datos y modelos propios</button></div>
+      </div>`}
       <div class="panel">
         <h3>Preferencias</h3>
         <label class="casilla"><input type="checkbox" id="pref-razon"${prefs.razonamiento ? ' checked' : ''}><span>Mostrar el razonamiento del modelo<small>Cuando el modelo lo envía (p. ej. DeepSeek R1, Qwen QwQ)</small></span></label>
@@ -1171,7 +1256,7 @@ curl ${esc(base)}/chat/completions \
         ${app?.cambiarServidor ? '<div class="fila-botones"><button class="btn chico" data-op="servidor">Cambiar de servidor</button></div>' : ''}
       </div>`}
       ${proyecto}
-      <p class="tenue" style="font: 12px var(--mono); text-align:center">LAB.IA ${esc(e.version)} · ${est.skills.length} skills · ${est.fuentes.length} fuentes</p>`;
+      <p class="tenue" style="font: 12px var(--mono); text-align:center">LABORATORIO.IA ${esc(e.version)} · ${est.skills.length} skills · ${est.fuentes.length} fuentes</p>`;
     abrirHoja('Ajustes', html, cuerpo => {
       cuerpo.addEventListener('change', async ev => {
         if (ev.target.id === 'pref-razon') { prefs.razonamiento = ev.target.checked; guardarPrefs(); }
@@ -1188,6 +1273,14 @@ curl ${esc(base)}/chat/completions \
         }
         if (op === 'servidor') app.cambiarServidor();
         if (op === 'modelos') hojaModelosTareas();
+        if (op === 'entrenar') hojaEntrenamiento();
+        const tm = ev.target.closest('[data-tema]')?.dataset.tema;
+        if (tm) {
+          prefs.tema = tm;
+          guardarPrefs();
+          aplicarTema();
+          cuerpo.querySelectorAll('[data-tema]').forEach(b => { b.classList.toggle('activa', b.dataset.tema === tm); b.setAttribute('aria-checked', b.dataset.tema === tm); });
+        }
         if (op === 'salir') { await api('/api/cuenta/salir', { metodo: 'POST' }); location.reload(); }
         if (op === 'ver-clave') { const c = cuerpo.querySelector('#clave-api'); c.textContent = c.textContent.endsWith('…') ? c.dataset.clave : c.dataset.clave.slice(0, 12) + '…'; }
         if (op === 'copiar-clave') copiar(cuerpo.querySelector('#clave-api').dataset.clave);
@@ -1203,7 +1296,7 @@ curl ${esc(base)}/chat/completions \
         if (op === 'permisos') app.pedirPermisos();
         if (op === 'ajustes-app') app.ajustesApp();
         if (op === 'abrir-termux') app.abrirTermux();
-        if (op === 't-reiniciar' && confirm('¿Reiniciar el servidor de lab.ia? Tarda unos segundos.')) app.termux('reiniciar');
+        if (op === 't-reiniciar' && confirm('¿Reiniciar el servidor de laboratorio.ia? Tarda unos segundos.')) app.termux('reiniciar');
         if (op === 't-detener' && confirm('¿Apagar el servidor? Podrás encenderlo desde la app o con «lab» en Termux.')) app.termux('detener');
         if (op === 'registro') {
           const pre = cuerpo.querySelector('#registro');
@@ -1211,12 +1304,92 @@ curl ${esc(base)}/chat/completions \
           pre.textContent = 'Cargando…';
           try {
             const r = await api('/api/registro');
-            pre.textContent = `── lab.ia ──\n${r.lab}\n\n── FreeLLMAPI ──\n${r.freellmapi}`;
+            pre.textContent = `── laboratorio.ia ──\n${r.lab}\n\n── FreeLLMAPI ──\n${r.freellmapi}`;
             pre.scrollTop = pre.scrollHeight;
           } catch (err) { pre.textContent = err.message; }
         }
       });
     }, true);
+  }
+
+  // ── Entrenamiento: datos y modelos propios ───────────────────────────────
+  const COLAB = 'https://colab.research.google.com/github/ReserchLab/lab-ia/blob/main/herramientas/entrenar/entrenar.ipynb';
+
+  function descargarArchivo(ruta) {
+    const url = new URL(ruta, location.href).href;
+    if (app?.descargar) { app.descargar(url); return; }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  async function hojaEntrenamiento() {
+    abrirHoja('Entrenar tu modelo', '<p class="tenue">Contando tus datos…</p>', null, true);
+    let d, loras = null;
+    try {
+      d = await api('/api/entrenamiento');
+      if (est.estadoServidor?.nube) loras = (await api('/api/entrenamiento/modelos').catch(() => ({ modelos: [] }))).modelos;
+    } catch (err) { $('#hoja-cuerpo').innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+    const cifra = (n, t) => `<div class="cifra"><b>${n}</b><small>${t}</small></div>`;
+    const archivo = (id, nombre, n, desc) => `<button class="fila-archivo" data-bajar="${id}"${n ? '' : ' disabled'}><span><b>${nombre}</b><small>${desc}</small></span><code>${n}</code></button>`;
+    const html = `
+      <p class="tenue" style="font-size:13px;margin:0 0 10px">Todo se queda en tu laboratorio.ia hasta que tú lo descargas. Nada se envía a otros servicios.</p>
+      <div class="cifras">
+        ${cifra(d.respuestas, 'respuestas')}${cifra(d.buenas, '▲ buenas')}${cifra(d.malas, '▼ malas')}
+        ${cifra(d.descartadas, 'regeneradas')}${cifra(d.ediciones, 'editadas')}${cifra(d.combinaciones, 'combinaciones')}
+      </div>
+      <div class="panel">
+        <h3>1 · Descarga tus datos (JSONL)</h3>
+        ${archivo('sft', 'Ajuste supervisado (SFT)', d.sft, 'Todas tus respuestas salvo las ▼, con su contexto y fuentes')}
+        ${archivo('sft-valoradas', 'SFT solo ▲', d.sftValoradas, 'Solo las que marcaste como buenas: menos, pero mejores')}
+        ${archivo('dpo', 'Preferencias (DPO)', d.dpo, 'Pares mejor/peor: regeneradas, combinaciones y tu elección ★')}
+        ${archivo('senales', 'Señales en crudo', d.senales, 'Ediciones, valoraciones y verificación, para analizar')}
+        <p class="tenue" style="font-size:12px;margin:8px 0 0">Formato de chat de OpenAI / Hugging Face: sirve para Unsloth, TRL, Axolotl, AutoTrain o el ajuste fino de OpenAI. Mínimo útil: ~50 ejemplos SFT o ~30 pares DPO.</p>
+      </div>
+      <div class="panel">
+        <h3>2 · Entrena gratis en Google Colab</h3>
+        <p style="font-size:14px;margin:0 0 6px">El cuaderno sube tu archivo, entrena un adaptador LoRA sobre ${esc(d.bases[0].nombre)} (o Mistral 7B, Gemma) en la GPU gratuita y lo sube a tu Cloudflare.</p>
+        <div class="fila-botones"><a class="btn chico rojo" href="${COLAB}" target="_blank" rel="noopener">▶ Abrir cuaderno en Colab</a><a class="btn chico" href="https://github.com/ReserchLab/lab-ia/blob/main/herramientas/entrenar/LEEME.md" target="_blank" rel="noopener">Guía paso a paso</a></div>
+      </div>
+      ${loras ? `<div class="panel">
+        <h3>3 · Usa tu modelo aquí</h3>
+        <p class="tenue" style="font-size:13px;margin:0 0 8px">Cuando el cuaderno termine, escribe el nombre del ajuste fino. Aparecerá como ★ en el selector de modelos y podrás combinarlo con los demás.</p>
+        <div id="mis-loras">${loras.length ? loras.map(l => `<div class="fila-archivo"><span><b>★ ${esc(l.etiqueta)}</b><small>${esc(l.lora)} · ${esc(l.base)}</small></span><button class="btn chico" data-quitar-lora="${esc(l.lora)}">Quitar</button></div>`).join('') : '<p class="tenue" style="font-size:13px">Aún no tienes modelos propios.</p>'}</div>
+        <form id="form-lora" class="campo" style="display:grid;gap:8px;margin-top:10px">
+          <select id="lora-base">${d.bases.map(b => `<option value="${esc(b.id)}">${esc(b.nombre)} — ${esc(b.nota)}</option>`).join('')}</select>
+          <input id="lora-nombre" placeholder="nombre del ajuste fino (p. ej. mi-lab-v1)" required pattern="[\w.-]{1,80}">
+          <input id="lora-etiqueta" placeholder="nombre visible (opcional)">
+          <button class="btn chico primario" type="submit">Añadir y probar</button>
+          <p id="lora-res" class="tenue" style="font-size:13px;margin:0"></p>
+        </form>
+      </div>` : `<div class="panel"><h3>3 · Úsalo</h3><p class="tenue" style="font-size:13px;margin:0">En tu laboratorio.ia de Cloudflare el modelo entrenado se añade aquí mismo. En el teléfono, cárgalo en Ollama o LM Studio con el adaptador que descarga el cuaderno.</p></div>`}`;
+    $('#hoja-cuerpo').innerHTML = html;
+    const cuerpo = $('#hoja-cuerpo');
+    cuerpo.onclick = async ev => {
+      const b = ev.target.closest('[data-bajar]');
+      if (b) { descargarArchivo(`/api/entrenamiento/${b.dataset.bajar}.jsonl`); aviso('Descargando…'); }
+      const q = ev.target.closest('[data-quitar-lora]');
+      if (q && confirm('¿Quitar este modelo de laboratorio.ia? (El ajuste fino sigue en tu Cloudflare.)')) {
+        await api(`/api/entrenamiento/modelos/${encodeURIComponent(q.dataset.quitarLora)}`, { metodo: 'DELETE' });
+        cargarModelos();
+        hojaEntrenamiento();
+      }
+    };
+    cuerpo.querySelector('#form-lora')?.addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const res = cuerpo.querySelector('#lora-res');
+      res.textContent = 'Guardando y probando el modelo…';
+      try {
+        const r = await api('/api/entrenamiento/modelos', { metodo: 'POST', cuerpo: { base: cuerpo.querySelector('#lora-base').value, lora: cuerpo.querySelector('#lora-nombre').value.trim(), etiqueta: cuerpo.querySelector('#lora-etiqueta').value } });
+        cargarModelos();
+        aviso(r.prueba?.ok ? 'Tu modelo responde ✓' : 'Guardado, pero aún no responde');
+        await hojaEntrenamiento();
+        if (!r.prueba?.ok) $('#hoja-cuerpo').insertAdjacentHTML('afterbegin', `<p class="error">Workers AI no encontró o no pudo usar ese ajuste fino: ${esc(r.prueba?.error || '')}. Comprueba el nombre con «npx wrangler ai finetune list».</p>`);
+      } catch (err) { res.textContent = err.message; }
+    });
   }
 
   // ── Memoria del chat ─────────────────────────────────────────────────────
@@ -1227,7 +1400,7 @@ curl ${esc(base)}/chat/completions \
     const refs = c.mensajes.filter(m => m.rol === 'assistant' && m.meta?.fuentes?.length).length;
     abrirHoja('Memoria del chat', `
       <div class="panel" style="margin-top:0">
-        <h3>Qué recuerda lab.ia de esta conversación</h3>
+        <h3>Qué recuerda laboratorio.ia de esta conversación</h3>
         <p style="margin:4px 0;font-size:14px">${c.mensajes.length} mensajes · ${ultimo ? `${ultimo.meta.memoria.literales} enviados completos al modelo` : 'todos enviados completos'}${c.memoria_hasta ? ` · ${c.memoria_hasta} más antiguos resumidos abajo` : ''}</p>
         <p class="tenue" style="font-size:13px;margin:4px 0">Las referencias citadas (${refs} respuestas con fuentes) se recuerdan siempre con su título y enlace exactos, aunque el chat sea largo.</p>
       </div>
@@ -1253,7 +1426,7 @@ curl ${esc(base)}/chat/completions \
         <optgroup label="Todos">${est.modelos.texto.filter(m => m.id !== 'auto' && !rec.has(m.id)).map(op).join('')}</optgroup>`;
     };
     const html = `
-      <p class="tenue" style="font-size:13px;margin:0 0 6px">Cada tarea usa su modelo cuando en el chat eliges «auto». Si el modelo falla, lab.ia reintenta con el automático.</p>
+      <p class="tenue" style="font-size:13px;margin:0 0 6px">Cada tarea usa su modelo cuando en el chat eliges «auto». Si el modelo falla, laboratorio.ia reintenta con el automático.</p>
       <div class="fila-botones" style="margin-top:4px"><button class="btn chico rojo" data-op="recomendar">✦ Usar los recomendados</button><button class="btn chico" data-op="todo-auto">Todo automático</button></div>
       ${est.modelos.error ? `<p class="error">${esc(est.modelos.error)}</p>` : ''}
       ${est.tareas.map(t => `
@@ -1350,7 +1523,7 @@ curl ${esc(base)}/chat/completions \
       </div>`;
     const pintar = f => [...lista].filter(p => !f || (p.nombre + p.id + p.nota).toLowerCase().includes(f)).sort((a, b) => orden(a) - orden(b) || a.nombre.localeCompare(b.nombre)).map(fila).join('');
     abrirHoja(`Proveedores · ${d.resumen.configured}/${d.resumen.total}`, `
-      <p class="tenue" style="font-size:13px;margin:0 0 8px">● configurado · ○ gratis sin clave · toca uno para añadir su clave. ${d.nube ? 'Las claves se guardan cifradas en tu lab.ia (D1) y solo las usas tú.' : 'Las claves se guardan cifradas en FreeLLMAPI.'}</p>
+      <p class="tenue" style="font-size:13px;margin:0 0 8px">● configurado · ○ gratis sin clave · toca uno para añadir su clave. ${d.nube ? 'Las claves se guardan cifradas en tu laboratorio.ia (D1) y solo las usas tú.' : 'Las claves se guardan cifradas en FreeLLMAPI.'}</p>
       ${d.nube ? '' : '<div class="fila-botones" style="margin-top:0"><button class="btn chico rojo" data-op="gratis">Activar los gratis sin clave</button></div>'}
       <input class="buscar" id="pv-filtro" type="search" placeholder="Buscar proveedor (groq, gemini, cloudflare…)" value="${esc(filtro)}" style="margin-top:10px">
       <div id="pv-lista">${pintar(filtro)}</div>`, cuerpo => {

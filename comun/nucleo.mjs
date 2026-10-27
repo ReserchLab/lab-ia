@@ -1,4 +1,4 @@
-// Núcleo de lab.ia, común al servidor del teléfono y a la nube (Cloudflare).
+// Núcleo de laboratorio.ia, común al servidor del teléfono y a la nube (Cloudflare).
 // Cada plataforma aporta:
 //   gateway  — completar(), conversar(), imagen(), modelosTexto(), modelosImagen(), buscar()
 //   almacen  — conversaciones y mensajes (métodos síncronos o asíncronos)
@@ -9,6 +9,7 @@ import { catalogo, scholar } from './fuentes.mjs';
 import { citasDe, leerPagina, verificar } from './verificacion.mjs';
 import { TAREAS, recomendados, recomendarPara, tareaDe } from './tareas.mjs';
 import { publica } from './skills.mjs';
+import { construirDatos } from './entrenamiento.mjs';
 
 export const TAMANOS = { cuadrado: [1024, 1024], vertical: [768, 1344], horizontal: [1344, 768] };
 
@@ -23,7 +24,7 @@ export const ESTILOS = {
 };
 export const CALIDADES = { rapida: 'Rápida', alta: 'Alta', premium: 'De pago' };
 
-export const SISTEMA_BASE = `Eres lab.ia, un asistente de investigación y creación.
+export const SISTEMA_BASE = `Eres laboratorio.ia, un asistente de investigación y creación.
 - Responde en el idioma del usuario (español por defecto), con Markdown claro: títulos cortos, listas y tablas cuando ayuden.
 - Para fórmulas usa notación legible en texto; para código, bloques con el lenguaje indicado.
 - Sé preciso. Si no sabes algo o no hay evidencia, dilo; nunca inventes datos, cifras ni referencias.
@@ -237,24 +238,42 @@ export function crearNucleo({ gateway, almacen, skills, tareas, guardarImagen, p
     const modo = ['chat', 'investigar', 'imagen'].includes(p.modo) ? p.modo : (skill?.modo || 'chat');
     let conv = p.conversacion && (await almacen.conversacion(p.conversacion)) ? p.conversacion : null;
     const texto = String(p.texto || '').trim();
+    let descartadas = [];
+    let idUsuario = null;
     if (p.regenerar && conv) {
+      // La respuesta que se regenera se conserva en la nueva: es una señal de preferencia para entrenar.
+      const ultimo = (await almacen.mensajes(conv)).at(-1);
+      if (ultimo?.rol === 'assistant') {
+        const meta = metaDe(ultimo);
+        if (ultimo.contenido?.trim()) descartadas = [...(meta.descartadas || []), { texto: ultimo.contenido.slice(0, 20_000), modelo: meta.modelo || null, valoracion: meta.valoracion || 0 }].slice(-5);
+      }
       await almacen.quitarUltimaRespuesta(conv);
+    } else if (p.editar && conv) {
+      // Editar una pregunta anterior: se borra desde ella hasta el final y se envía la nueva versión.
+      if (!texto) return null;
+      const r = await almacen.truncarDesde(conv, String(p.editar));
+      if (!r) return null;
+      const [antes, respuesta] = r.borrados;
+      const edicion = antes?.rol === 'user' && antes.contenido !== texto
+        ? { antes: antes.contenido.slice(0, 20_000), respuesta: respuesta?.rol === 'assistant' ? respuesta.contenido.slice(0, 20_000) : null, modelo: respuesta?.meta?.modelo || null, fecha: Date.now() }
+        : null;
+      idUsuario = await almacen.agregar(conv, 'user', texto, { modo, skill: skill?.id || null, ...(edicion ? { edicion } : {}) });
     } else {
       if (!texto) return null;
       if (!conv) conv = await almacen.crearConversacion(texto.replace(/\s+/g, ' ').slice(0, 60), skill?.id);
-      await almacen.agregar(conv, 'user', texto, { modo, skill: skill?.id || null });
+      idUsuario = await almacen.agregar(conv, 'user', texto, { modo, skill: skill?.id || null });
     }
-    return { p, skill, modo, conv, texto };
+    return { p, skill, modo, conv, texto, descartadas, idUsuario };
   }
 
-  async function chat({ p, skill, modo, conv, texto }, emitir, señal) {
+  async function chat({ p, skill, modo, conv, texto, descartadas = [], idUsuario }, emitir, señal) {
     // Prioridad: el modelo elegido en el chat > el de la skill > el de la tarea > auto.
     const elegido = p.modelo && p.modelo !== 'auto' ? p.modelo : '';
     const modelo = elegido || skill?.modelo || await modeloTarea(tareaDe(skill, modo));
     const rapido = await modeloTarea('rapido');
     const historial = await almacen.mensajes(conv);
     const pregunta = [...historial].reverse().find(m => m.rol === 'user')?.contenido || texto;
-    emitir('inicio', { conversacion: conv, modo });
+    emitir('inicio', { conversacion: conv, modo, mensajeUsuario: idUsuario });
 
     try {
       await antesDeResponder?.(emitir, señal);
@@ -344,7 +363,7 @@ Return ONLY the prompt.` },
         memoria: { resumidos: ctx.resumidos, literales: ctx.literales },
         ...(fuentes.length ? { fuentes: fuentes.map(({ texto: _t, ...f }) => f) } : {}), ...(fallos.length ? { fallos } : {}),
         ...(consultas.length ? { consultas } : {}), ...(razonamiento ? { razonamiento } : {}),
-        ...(combinacion ? { combinacion } : {}),
+        ...(combinacion ? { combinacion } : {}), ...(descartadas.length ? { descartadas } : {}),
       };
       const id = await almacen.agregar(conv, 'assistant', respuesta, meta);
       emitir('fin', { id, ...meta });
@@ -437,8 +456,22 @@ Usa modo "investigar" si la skill necesita evidencia publicada; "imagen" si gene
     return revision;
   }
 
+  // ── Señales para entrenar un modelo propio ──────────────────────────────
+  /** 👍/👎 de una respuesta y, en una combinación, qué modelo respondió mejor. */
+  async function valorarMensaje(m, { valor, preferido }) {
+    const cambios = {};
+    if (valor !== undefined) cambios.valoracion = [1, -1].includes(Number(valor)) ? Number(valor) : 0;
+    if (preferido !== undefined) cambios.preferido = Number.isInteger(preferido) && preferido >= 0 && preferido < (metaDe(m).combinacion?.respuestas?.length || 0) ? preferido : null;
+    const meta = await almacen.actualizarMeta(m.id, cambios);
+    return { valoracion: meta.valoracion || 0, preferido: meta.preferido ?? null };
+  }
+
+  async function datosEntrenamiento(opciones) {
+    return construirDatos(await almacen.exportable(), opciones);
+  }
+
   return {
-    FUENTES, TAREAS, ESTILOS, explicarError, metaDe, publica,
+    FUENTES, TAREAS, ESTILOS, explicarError, metaDe, publica, valorarMensaje, datosEntrenamiento,
     prepararChat, chat, generarSkill, recomendarModelos, listarTareas, recomendarTareas, probarModelo, verificarMensaje, revisarMensaje,
   };
 }

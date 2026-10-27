@@ -1,6 +1,6 @@
-<p align="center"><img src="docs/icono.svg" width="96" alt="lab.ia"></p>
+<p align="center"><img src="docs/icono.svg" width="96" alt="laboratorio.ia"></p>
 
-<h1 align="center">lab.ia</h1>
+<h1 align="center">laboratorio.ia</h1>
 
 <p align="center"><b>Chat, investigación científica verificada e imágenes con IA.</b><br>
 En tu propia cuenta de Cloudflare (gratis) o dentro de tu teléfono. Libre y sin publicidad.</p>
@@ -28,10 +28,13 @@ En tu propia cuenta de Cloudflare (gratis) o dentro de tu teléfono. Libre y sin
 - **21 skills** (biología molecular, biomedicina y ensayos, fármacos, ecología, física y matemáticas, revisor de artículos, redacción científica, código científico, diseño experimental, scRNA-seq, nf-core…). Formato `SKILL.md` compatible con Claude: crea las tuyas a mano o describiéndolas a la IA.
 - **Memoria del chat**: recuerda la conversación (resumen automático de lo antiguo + registro fijo de las referencias citadas). La puedes ver y editar.
 - **Modelos por tarea**: uno para conversar, otro para investigar, razonar, programar e imágenes, con recomendaciones probadas.
+- **Varios modelos a la vez**: compara 2-4 respuestas en pestañas, elige la mejor (★) y recibe una integrada.
+- **Edita y regenera**: corrige cualquier pregunta anterior y vuelve a enviarla, o regenera la última respuesta. Valora cada respuesta con ▲ / ▼.
+- **Entrena tu propio modelo**: tus valoraciones, ediciones, regeneraciones y elecciones se exportan como datos **SFT** y **DPO** (JSONL). Un [cuaderno de Colab gratis](herramientas/entrenar/LEEME.md) entrena un adaptador LoRA y lo sube a tu Workers AI, y aparece en laboratorio.ia como ★ tu modelo.
 - **API compatible con OpenAI** con tu clave `labia-…`: usa tus modelos desde Codex, Cline o el SDK de OpenAI.
-- Interfaz oscura de matriz de puntos, pensada para el móvil (Nothing, Android) y que se adapta a tablet y escritorio.
+- Interfaz de matriz de puntos con **modo noche** (por defecto) y **modo día**, pensada para el móvil (Nothing, Android) y que se adapta a tablet y escritorio.
 
-## <a id="nube"></a>Tu lab.ia en Cloudflare (recomendado)
+## <a id="nube"></a>Tu laboratorio.ia en Cloudflare (recomendado)
 
 Todo corre en **tu** cuenta de Cloudflare: tus datos (D1), tus imágenes (KV), tus modelos (Workers AI) y tus claves, cifradas. El plan gratuito alcanza para uso personal.
 
@@ -54,7 +57,7 @@ npx wrangler secret put CLAVE_MAESTRA  # recomendado: cifra las claves con un se
 ```
 </details>
 
-**Límites del plan gratuito de Cloudflare:** 10 000 neuronas al día de Workers AI (un par de cientos de respuestas o unas decenas de imágenes; se reponen a las 00:00 UTC). Cuando se agotan, lab.ia sigue con Kilo, OVH, Pollinations y tus claves. Algunas bases (OpenAlex, Semantic Scholar, arXiv) limitan las peticiones desde Cloudflare; el resto de fuentes cubre ese hueco.
+**Límites del plan gratuito de Cloudflare:** 10 000 neuronas al día de Workers AI (un par de cientos de respuestas o unas decenas de imágenes; se reponen a las 00:00 UTC). Cuando se agotan, laboratorio.ia sigue con Kilo, OVH, Pollinations y tus claves. Algunas bases (OpenAlex, Semantic Scholar, arXiv) limitan las peticiones desde Cloudflare; el resto de fuentes cubre ese hueco.
 
 ## App de Android
 
@@ -62,7 +65,7 @@ Descarga **[lab.ia.apk](https://github.com/ReserchLab/lab-ia/releases/latest/dow
 
 ## En el teléfono, sin nube (Termux)
 
-Para quien quiere todo local: lab.ia y [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) dentro de Debian en Termux, accesibles desde tu Wi-Fi con PIN. Instrucciones en **[termux/LEEME.md](termux/LEEME.md)**.
+Para quien quiere todo local: laboratorio.ia y [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) dentro de Debian en Termux, accesibles desde tu Wi-Fi con PIN. Instrucciones en **[termux/LEEME.md](termux/LEEME.md)**.
 
 ## API compatible con OpenAI
 
@@ -78,7 +81,7 @@ curl https://lab-ia.<tu-subdominio>.workers.dev/v1/chat/completions \
 
 ## Skills
 
-Una skill es una carpeta con `SKILL.md`: el frontmatter de Claude (`name`, `description`) más campos opcionales de lab.ia: `nombre`, `resumen`, `icono`, `modo` (chat · investigar · imagen), `fuentes`, `modelo`, `tarea`, `leer: si`, `verificacion: completa`, `categoria`. Una carpeta `references/` añade material de consulta. Para importar skills de Claude:
+Una skill es una carpeta con `SKILL.md`: el frontmatter de Claude (`name`, `description`) más campos opcionales de laboratorio.ia: `nombre`, `resumen`, `icono`, `modo` (chat · investigar · imagen), `fuentes`, `modelo`, `tarea`, `leer: si`, `verificacion: completa`, `categoria`. Una carpeta `references/` añade material de consulta. Para importar skills de Claude:
 
 ```bash
 node herramientas/importar-skills.mjs servidor/skills /ruta/a/una-skill --modo investigar --fuentes pubmed,europepmc
@@ -98,7 +101,7 @@ node herramientas/importar-skills.mjs servidor/skills /ruta/a/una-skill --modo i
 
 ## Apoya el proyecto
 
-Si lab.ia te sirve: dale una **★ estrella** en GitHub y compártelo.
+Si laboratorio.ia te sirve: dale una **★ estrella** en GitHub y compártelo.
 
 Donaciones en cripto:
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Importa skills de Claude (carpetas con SKILL.md) a lab.ia.
+// Importa skills de Claude (carpetas con SKILL.md) a laboratorio.ia.
 // Uso: node importar-skills.mjs <destino> <carpeta-skill> [más carpetas…] [--modo investigar] [--fuentes a,b] [--categoria X]
-// Copia SKILL.md, references/ y la licencia; añade los campos de lab.ia al frontmatter
+// Copia SKILL.md, references/ y la licencia; añade los campos de laboratorio.ia al frontmatter
 // sin tocar `name` ni `description`, así la skill sigue siendo válida para Claude.
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -15,7 +15,7 @@ const CONOCIDAS = {
   'instrument-data-to-allotrope': { tarea: 'codigo', nombre: 'Datos de instrumentos → Allotrope', resumen: 'Convertir datos de instrumentos de laboratorio (PDF, CSV, Excel) a Allotrope ASM o CSV plano.', icono: '⧉', modo: 'chat', fuentes: 'web', categoria: 'Ciencias de la vida' },
 };
 
-const NOTA = '> Nota de lab.ia: aquí no puedes ejecutar los scripts ni leer archivos que mencione esta skill. Cuando haga falta, entrega el código completo para que el usuario lo ejecute (por ejemplo en Termux o Notebook Studio) y explica qué resultado esperar.';
+const NOTA = '> Nota de laboratorio.ia: aquí no puedes ejecutar los scripts ni leer archivos que mencione esta skill. Cuando haga falta, entrega el código completo para que el usuario lo ejecute (por ejemplo en Termux o Notebook Studio) y explica qué resultado esperar.';
 
 const args = process.argv.slice(2);
 const opcion = n => { const i = args.indexOf(`--${n}`); return i >= 0 ? args.splice(i, 2)[1] : undefined; };
@@ -37,7 +37,7 @@ for (const origen of origenes) {
   for (const [k, v] of Object.entries(forzado)) if (v) extra[k] = v;
   const frontmatter = m[1].split(/\r?\n/).filter(l => !/^(nombre|resumen|icono|modo|fuentes|categoria|tarea):/.test(l));
   for (const [k, v] of Object.entries(extra)) frontmatter.push(`${k}: ${v}`);
-  const cuerpo = m[2].includes('Nota de lab.ia') ? m[2] : `${NOTA}\n\n${m[2].trim()}`;
+  const cuerpo = m[2].includes('Nota de laboratorio.ia') ? m[2] : `${NOTA}\n\n${m[2].trim()}`;
 
   const dir = path.join(destino, nombre);
   mkdirSync(dir, { recursive: true });

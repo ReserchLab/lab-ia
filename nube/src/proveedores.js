@@ -148,12 +148,27 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
     return lista;
   }
 
+  // Modelos propios: adaptadores LoRA entrenados con tus conversaciones y subidos a Workers AI.
+  async function misLoras() {
+    if (sinWorkersAI) return [];
+    const f = await env.DB.prepare("SELECT valor FROM ajustes WHERE usuario = ? AND clave = 'loras'").bind(usuario).first();
+    return f ? JSON.parse(f.valor) : [];
+  }
+  async function ponerLoras(lista) {
+    await env.DB.prepare("INSERT OR REPLACE INTO ajustes (usuario, clave, valor) VALUES (?, 'loras', ?)").bind(usuario, JSON.stringify(lista.slice(0, 20))).run();
+    listaTexto = null;
+  }
+
   let listaTexto = null;
   async function modelosTexto() {
     if (listaTexto) return listaTexto;
     const provs = await disponibles();
-    const listas = await Promise.allSettled(provs.map(modelosDe));
-    listaTexto = [{ id: 'auto', nombre: 'Automático (lab.ia elige y cambia si falla)' }, ...listas.flatMap(r => (r.status === 'fulfilled' ? r.value : []))];
+    const [listas, loras] = await Promise.all([Promise.allSettled(provs.map(modelosDe)), misLoras()]);
+    listaTexto = [
+      { id: 'auto', nombre: 'Automático (laboratorio.ia elige y cambia si falla)' },
+      ...loras.map(l => ({ id: `workersai/${l.base}#lora:${l.lora}`, nombre: `★ ${l.etiqueta || l.lora} · tu modelo entrenado`, propio: true })),
+      ...listas.flatMap(r => (r.status === 'fulfilled' ? r.value : [])),
+    ];
     return listaTexto;
   }
 
@@ -203,7 +218,8 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
     const { prov, id } = separar(modelo);
     if (prov.id === 'workersai') {
       try {
-        return await env.AI.run(id, { messages: mensajes, stream, max_tokens: max, ...(temperatura != null ? { temperature: temperatura } : {}) });
+        const [base, lora] = id.split('#lora:');
+        return await env.AI.run(base, { messages: mensajes, stream, max_tokens: lora ? Math.min(max, 2048) : max, ...(lora ? { lora } : {}), ...(temperatura != null ? { temperature: temperatura } : {}) });
       } catch (e) {
         if (/4006|daily free allocation/.test(e.message)) await marcarAgotado();
         throw new ErrorProveedor(`Workers AI: ${e.message}`, /5035|not available on the Workers Free/.test(e.message) ? 402 : 502, 'workersai');
@@ -382,5 +398,5 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
     await env.DB.prepare('DELETE FROM claves WHERE usuario = ? AND proveedor = ?').bind(usuario, plataforma).run();
   }
 
-  return { completar, conversar, imagen, modelosTexto, modelosImagen, buscar, enLinea: async () => true, lista, agregar, quitar };
+  return { completar, conversar, imagen, modelosTexto, modelosImagen, buscar, enLinea: async () => true, lista, agregar, quitar, misLoras, ponerLoras };
 }

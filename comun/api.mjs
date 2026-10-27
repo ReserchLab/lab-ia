@@ -1,8 +1,10 @@
 // Rutas de la API comunes al teléfono y a la nube. Cada plataforma resuelve antes las suyas
 // (acceso, estado, proveedores, medios) y llama a esta función con el núcleo ya creado.
 //   pet = { metodo, ruta, cuerpo: async () => objeto }
-// Devuelve { estado, datos }, { sse: async (emitir, señal) => … } o null si la ruta no es común.
+// Devuelve { estado, datos }, { sse: async (emitir, señal) => … }, { archivo: { nombre, tipo, texto } }
+// o null si la ruta no es común.
 import { TAREAS } from './tareas.mjs';
+import { aJsonl, BASES_LORA } from './entrenamiento.mjs';
 
 export async function rutasComunes(nucleo, { almacen, skills, tareas }, pet) {
   const { metodo, ruta } = pet;
@@ -48,7 +50,20 @@ export async function rutasComunes(nucleo, { almacen, skills, tareas }, pet) {
   const sk = ruta.match(/^\/api\/skills\/([\w-]+)$/);
   if (sk && metodo === 'DELETE') return (await skills.borrar(sk[1])) ? ok({ ok: true }) : error(404, 'No existe');
 
-  const mv = ruta.match(/^\/api\/mensajes\/([\w-]+)\/(verificar|revision)$/);
+  // ── Entrenamiento: estadísticas y descarga de los datos en JSONL ──
+  if (ruta === '/api/entrenamiento' && metodo === 'GET') {
+    const { sft, dpo, senales, cuenta } = await nucleo.datosEntrenamiento();
+    const { sft: valoradas } = await nucleo.datosEntrenamiento({ soloValoradas: true });
+    return ok({ ...cuenta, sft: sft.length, sftValoradas: valoradas.length, dpo: dpo.length, senales: senales.length, bases: BASES_LORA });
+  }
+  const ex = ruta.match(/^\/api\/entrenamiento\/(sft|sft-valoradas|dpo|senales)\.jsonl$/);
+  if (ex && metodo === 'GET') {
+    const datos = await nucleo.datosEntrenamiento({ soloValoradas: ex[1] === 'sft-valoradas' });
+    const filas = ex[1] === 'dpo' ? datos.dpo : ex[1] === 'senales' ? datos.senales : datos.sft;
+    return { archivo: { nombre: `laboratorio-ia-${ex[1]}-${new Date().toISOString().slice(0, 10)}.jsonl`, tipo: 'application/x-ndjson; charset=utf-8', texto: aJsonl(filas) } };
+  }
+
+  const mv = ruta.match(/^\/api\/mensajes\/([\w-]+)\/(verificar|revision|valoracion)$/);
   if (mv) {
     const m = await almacen.mensaje(mv[1]);
     if (!m) return error(404, 'No existe el mensaje');
@@ -58,6 +73,7 @@ export async function rutasComunes(nucleo, { almacen, skills, tareas }, pet) {
       return ok({ verificacion: await nucleo.verificarMensaje(m, datos.completa === true) });
     }
     if (mv[2] === 'revision' && metodo === 'PATCH') return ok({ revision: await nucleo.revisarMensaje(m, datos) });
+    if (mv[2] === 'valoracion' && metodo === 'PATCH') return ok(await nucleo.valorarMensaje(m, datos));
   }
 
   if (ruta === '/api/conversaciones' && metodo === 'GET') return ok(await almacen.conversaciones());

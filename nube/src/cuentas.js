@@ -1,4 +1,4 @@
-// Cuentas de lab.ia en la nube: registro, sesión por galleta y clave unificada (labia-…)
+// Cuentas de laboratorio.ia en la nube: registro, sesión por galleta y clave unificada (labia-…)
 // para usar los modelos desde otros programas (API compatible con OpenAI en /v1).
 import { aleatorio, cifrar, descifrar, hashContrasena, iguales, sha256 } from './cifrado.js';
 
@@ -55,7 +55,7 @@ export async function registrar(env, email, contrasena) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw Object.assign(new Error('Escribe un email válido'), { estado: 400 });
   if (String(contrasena || '').length < 8) throw Object.assign(new Error('La contraseña necesita al menos 8 caracteres'), { estado: 400 });
   const primero = !(await hayUsuarios(env));
-  if (!primero && !(await registroAbierto(env))) throw Object.assign(new Error('El registro está cerrado. Pide acceso al administrador de este lab.ia.'), { estado: 403 });
+  if (!primero && !(await registroAbierto(env))) throw Object.assign(new Error('El registro está cerrado. Pide acceso al administrador de este laboratorio.ia.'), { estado: 403 });
   if (await env.DB.prepare('SELECT 1 FROM usuarios WHERE email = ?').bind(email).first()) throw Object.assign(new Error('Ese email ya tiene cuenta'), { estado: 409 });
   const { hash, sal } = await hashContrasena(contrasena);
   const id = crypto.randomUUID();

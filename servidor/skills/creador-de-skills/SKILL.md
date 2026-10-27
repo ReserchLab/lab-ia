@@ -1,8 +1,8 @@
 ---
 name: creador-de-skills
-description: Diseña nuevas skills para lab.ia (y compatibles con Claude).
+description: Diseña nuevas skills para laboratorio.ia (y compatibles con Claude).
 nombre: Creador de skills
-resumen: Diseña nuevas skills para lab.ia (y compatibles con Claude).
+resumen: Diseña nuevas skills para laboratorio.ia (y compatibles con Claude).
 icono: ⚙
 modo: chat
 fuentes: 

@@ -50,6 +50,30 @@ export class AlmacenD1 {
     if (ultimo?.rol === 'assistant') await this.db.prepare('DELETE FROM mensajes WHERE id = ?').bind(ultimo.id).run();
   }
 
+  /** Borra un mensaje y todos los que le siguen (editar una pregunta anterior). Devuelve los borrados. */
+  async truncarDesde(conversacion, mensaje) {
+    const lista = await this.mensajes(conversacion);
+    const i = lista.findIndex(m => m.id === mensaje);
+    if (i < 0) return null;
+    const borrados = lista.slice(i);
+    await this.db.batch(borrados.map(m => this.db.prepare('DELETE FROM mensajes WHERE id = ? AND conversacion = ?').bind(m.id, conversacion)));
+    const { memoria_hasta: hasta } = await this.memoria(conversacion);
+    if (hasta > i) await this.guardarMemoria(conversacion, '', 0); // la memoria resumía mensajes que ya no existen
+    return { indice: i, borrados: borrados.map(m => ({ ...m, meta: JSON.parse(m.meta) })) };
+  }
+
+  /** Todas las conversaciones con sus mensajes (exportar datos de entrenamiento), en una consulta. */
+  async exportable() {
+    const r = await this.db.prepare('SELECT m.conversacion, m.id, m.rol, m.contenido, m.meta FROM mensajes m JOIN conversaciones c ON c.id = m.conversacion WHERE c.usuario = ? ORDER BY c.creada, m.conversacion, m.creado, m.rowid LIMIT 50000')
+      .bind(this.u).all();
+    const convs = new Map();
+    for (const m of r.results) {
+      if (!convs.has(m.conversacion)) convs.set(m.conversacion, { id: m.conversacion, mensajes: [] });
+      convs.get(m.conversacion).mensajes.push(m);
+    }
+    return [...convs.values()];
+  }
+
   async renombrar(id, titulo) {
     await this.db.prepare('UPDATE conversaciones SET titulo = ? WHERE id = ? AND usuario = ?').bind(titulo, id, this.u).run();
   }

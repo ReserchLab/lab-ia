@@ -4,8 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#000000">
-  <meta name="color-scheme" content="dark">
-  <title>lab.ia</title>
+  <meta name="color-scheme" content="dark light">
+  <script>
+    // Tema antes de pintar (evita el destello): noche por defecto, día o el del sistema.
+    try {
+      var t = (JSON.parse(localStorage.getItem('cardon-lab:prefs')) || {}).tema || 'oscuro';
+      if (t === 'sistema') t = matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'oscuro';
+      document.documentElement.dataset.tema = t;
+      document.querySelector('meta[name=theme-color]').content = t === 'claro' ? '#f5f5f2' : '#000000';
+    } catch (e) { /* sin almacenamiento: noche */ }
+  </script>
+  <title>laboratorio.ia</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icono.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/fuentes/fuentes.css">
@@ -15,8 +24,8 @@
   <!-- Acceso con PIN (equipos de la red) -->
   <section id="acceso" class="acceso" hidden>
     <div class="acceso-caja">
-      <div class="logo grande" aria-hidden="true">LAB<i></i>IA</div>
-      <h1 class="dot">lab.ia</h1>
+      <div class="logo grande" aria-hidden="true">LABORATORIO<i></i>IA</div>
+      <h1 class="dot">laboratorio.ia</h1>
       <p class="tenue" id="acceso-texto">Escribe el PIN que aparece en el teléfono<br>(Ajustes → Conexión, o en la terminal de <code>lab</code>).</p>
       <form id="form-pin" autocomplete="off">
         <input id="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" aria-label="PIN" required>
@@ -36,8 +45,7 @@
     <!-- Barra lateral: conversaciones -->
     <aside id="lateral" class="lateral" aria-label="Conversaciones">
       <div class="lateral-cab">
-        <div class="logo" aria-hidden="true">LAB<i></i>IA</div>
-        <span class="marca">lab.ia</span>
+        <div class="logo" aria-hidden="true">LABORATORIO<i></i>IA</div>
         <button class="icono-btn solo-movil" data-accion="cerrar-lateral" aria-label="Cerrar">✕</button>
       </div>
       <button class="btn nuevo" data-accion="nueva">＋ Nueva conversación</button>

@@ -1,7 +1,7 @@
-# lab.ia en el teléfono (Termux)
+# laboratorio.ia en el teléfono (Termux)
 
-Avanzado: corre lab.ia y FreeLLMAPI dentro de Debian en Termux, sin nube. Para la mayoría es más fácil
-**desplegar lab.ia en Cloudflare** (ver el README principal) y usar la app con esa dirección.
+Avanzado: corre laboratorio.ia y FreeLLMAPI dentro de Debian en Termux, sin nube. Para la mayoría es más fácil
+**desplegar laboratorio.ia en Cloudflare** (ver el README principal) y usar la app con esa dirección.
 
 ## Instalación
 
@@ -28,6 +28,6 @@ Avanzado: corre lab.ia y FreeLLMAPI dentro de Debian en Termux, sin nube. Para l
    echo 'allow-external-apps=true' >> ~/.termux/termux.properties && termux-reload-settings
    lab
    ```
-   `lab` enciende FreeLLMAPI y lab.ia, y muestra las direcciones y el PIN. Abre la app lab.ia.
+   `lab` enciende FreeLLMAPI y laboratorio.ia, y muestra las direcciones y el PIN. Abre la app laboratorio.ia.
 
 `ia` (dentro de Debian) es un menú para Claude Code / Codex con FreeLLMAPI, proveedores y claves.

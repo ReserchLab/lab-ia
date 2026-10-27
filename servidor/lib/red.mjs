@@ -4,7 +4,7 @@ import http from 'node:http';
 import https from 'node:https';
 import zlib from 'node:zlib';
 
-const UA = 'Mozilla/5.0 (Linux; Android 14) lab.ia/1.1';
+const UA = 'Mozilla/5.0 (Linux; Android 14) laboratorio.ia/1.1';
 const TIEMPO = 25_000;
 
 // node:https en lugar de fetch: el fetch de Node corta la conexión a los 10 s, y en

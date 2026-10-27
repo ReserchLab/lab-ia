@@ -1,5 +1,5 @@
 {
-  // lab.ia en Cloudflare: Worker + interfaz (web/) + D1 + KV + Workers AI.
+  // laboratorio.ia en Cloudflare: Worker + interfaz (web/) + D1 + KV + Workers AI.
   // Sin IDs: al desplegar, wrangler crea la base de datos D1 y el KV en tu cuenta.
   "$schema": "https://unpkg.com/wrangler@4.145.0/config-schema.json",
   "name": "lab-ia",

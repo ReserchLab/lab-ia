@@ -10,7 +10,7 @@
     </queries>
     <application
         android:theme="@style/Tema"
-        android:label="lab.ia"
+        android:label="laboratorio.ia"
         android:icon="@mipmap/icono"
         android:roundIcon="@mipmap/icono"
         android:usesCleartextTraffic="true"

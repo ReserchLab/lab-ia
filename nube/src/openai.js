@@ -1,4 +1,4 @@
-// API compatible con OpenAI para usar lab.ia desde otros programas (Codex, SDK de OpenAI, Cline…)
+// API compatible con OpenAI para usar laboratorio.ia desde otros programas (Codex, SDK de OpenAI, Cline…)
 // con la clave unificada del usuario:  base_url = https://<tu-worker>/v1 · api_key = labia-…
 const json = (datos, estado = 200) => new Response(JSON.stringify(datos), { status: estado, headers: { 'Content-Type': 'application/json' } });
 const errorOpenAI = (mensaje, estado = 400, tipo = 'invalid_request_error') => json({ error: { message: mensaje, type: tipo } }, estado);

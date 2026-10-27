@@ -61,8 +61,8 @@ export async function consumir(env, request, usuario, modo, peso = 1) {
   for (const [clave, limite] of claves) {
     if ((await contador(env, clave)) + peso > limite) {
       const msg = peso > 1 && !clave.startsWith('total') ? `No te quedan usos suficientes para combinar ${peso} modelos hoy. Prueba con menos modelos o con uno solo.` : clave.startsWith('total')
-        ? 'La versión de prueba llegó a su límite de hoy. Vuelve mañana o crea tu propio lab.ia gratis: https://labia-ciencia.pages.dev'
-        : `Llegaste al límite de la versión de prueba (${limite} ${tipo === 'investigar' ? 'investigaciones' : 'mensajes'} al día). Crea tu propio lab.ia gratis, sin límites de prueba: https://labia-ciencia.pages.dev`;
+        ? 'La versión de prueba llegó a su límite de hoy. Vuelve mañana o crea tu propio laboratorio.ia gratis: https://labia-ciencia.pages.dev'
+        : `Llegaste al límite de la versión de prueba (${limite} ${tipo === 'investigar' ? 'investigaciones' : 'mensajes'} al día). Crea tu propio laboratorio.ia gratis, sin límites de prueba: https://labia-ciencia.pages.dev`;
       throw Object.assign(new Error(msg), { estado: 429 });
     }
   }
@@ -76,5 +76,6 @@ export function rutaBloqueada(metodo, ruta) {
   if (ruta.startsWith('/api/proveedores/') && metodo !== 'GET') return true;
   if (ruta.startsWith('/api/tareas') && metodo !== 'GET') return true;
   if (ruta.startsWith('/api/skills') && metodo !== 'GET') return true;
+  if (ruta.startsWith('/api/entrenamiento/modelos')) return true;
   return false;
 }

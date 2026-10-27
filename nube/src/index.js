@@ -1,8 +1,9 @@
-// lab.ia en Cloudflare Workers. Misma interfaz (web/) y mismo núcleo (comun/) que el servidor del
+// laboratorio.ia en Cloudflare Workers. Misma interfaz (web/) y mismo núcleo (comun/) que el servidor del
 // teléfono; aquí los modelos van por Workers AI y las claves de cada usuario, y los datos por D1 y KV.
 import './red.js';
 import { crearNucleo } from '../../comun/nucleo.mjs';
 import { rutasComunes } from '../../comun/api.mjs';
+import { BASES_LORA } from '../../comun/entrenamiento.mjs';
 import { asegurarEsquema } from './esquema.js';
 import { AlmacenD1, tareasD1 } from './almacen.js';
 import { SkillsD1 } from './skills.js';
@@ -11,7 +12,7 @@ import { manejarOpenAI } from './openai.js';
 import * as cuentas from './cuentas.js';
 import * as demo from './demo.js';
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 
 const json = (datos, estado = 200, extra = {}) => new Response(JSON.stringify(datos), {
   status: estado,
@@ -66,13 +67,13 @@ async function api(request, env, ctx, ruta, invitado) {
 
   // ── Versión de prueba: invitado automático, límites y rutas bloqueadas ──
   if (demo.esDemo(env)) {
-    if (demo.rutaBloqueada(metodo, ruta)) return json({ error: 'No disponible en la versión de prueba. Crea tu propio lab.ia gratis: https://labia-ciencia.pages.dev' }, 403);
+    if (demo.rutaBloqueada(metodo, ruta)) return json({ error: 'No disponible en la versión de prueba. Crea tu propio laboratorio.ia gratis: https://labia-ciencia.pages.dev' }, 403);
     if (ruta === '/api/estado' && metodo === 'GET') {
       return json({ version: VERSION, nube: true, demo: true, autorizado: true, local: false, gateway: true, usuario: { email: 'invitado', rol: 'invitado' }, uso: await demo.uso(env, invitado.id), limites: demo.LIMITES, repo: env.REPO });
     }
     if (ruta === '/api/chat' && metodo === 'POST') {
       const p = await cuerpo();
-      if (p.modo === 'imagen') return json({ error: 'Las imágenes no están en la versión de prueba. En tu propio lab.ia sí: https://labia-ciencia.pages.dev' }, 403);
+      if (p.modo === 'imagen') return json({ error: 'Las imágenes no están en la versión de prueba. En tu propio laboratorio.ia sí: https://labia-ciencia.pages.dev' }, 403);
       if (Array.isArray(p.combinar?.modelos)) p.combinar.modelos = p.combinar.modelos.slice(0, demo.LIMITES.modelosCombinados);
       const peso = p.combinar?.modelos?.length >= 2 ? p.combinar.modelos.length : 1;
       await demo.consumir(env, request, invitado.id, p.modo, peso);
@@ -106,7 +107,7 @@ async function api(request, env, ctx, ruta, invitado) {
   }
 
   const usuario = invitado || await cuentas.usuarioDeSesion(env, request);
-  if (!usuario) return json({ error: 'Inicia sesión en lab.ia' }, 401);
+  if (!usuario) return json({ error: 'Inicia sesión en laboratorio.ia' }, 401);
   const c = contexto(env, usuario);
 
   // ── Cuenta (con sesión) ──
@@ -132,6 +133,22 @@ async function api(request, env, ctx, ruta, invitado) {
   const pq = ruta.match(/^\/api\/proveedores\/clave\/([\w-]+)$/);
   if (pq && metodo === 'DELETE') { await c.gateway.quitar(pq[1]); return json({ ok: true }); }
 
+  // ── Modelos propios (LoRA en Workers AI) ──
+  if (ruta === '/api/entrenamiento/modelos' && metodo === 'GET') return json({ modelos: await c.gateway.misLoras() });
+  if (ruta === '/api/entrenamiento/modelos' && metodo === 'POST') {
+    const { lora, base, etiqueta } = await cuerpo();
+    if (!BASES_LORA.some(b => b.id === base)) return json({ error: 'Modelo base no compatible con LoRA' }, 400);
+    if (!/^[\w.-]{1,80}$/.test(String(lora || ''))) return json({ error: 'Escribe el nombre o el ID del ajuste fino tal como aparece en Cloudflare' }, 400);
+    const lista = (await c.gateway.misLoras()).filter(l => l.lora !== lora);
+    lista.unshift({ lora, base, etiqueta: String(etiqueta || '').trim().slice(0, 60) || lora, creado: Date.now() });
+    await c.gateway.ponerLoras(lista);
+    // Prueba real: si Workers AI no encuentra el adaptador se avisa, pero se guarda igual.
+    const prueba = await c.nucleo.probarModelo({ modelo: `workersai/${base}#lora:${lora}` });
+    return json({ modelos: lista, prueba });
+  }
+  const ml = ruta.match(/^\/api\/entrenamiento\/modelos\/([\w.-]+)$/);
+  if (ml && metodo === 'DELETE') { await c.gateway.ponerLoras((await c.gateway.misLoras()).filter(l => l.lora !== ml[1])); return json({ ok: true }); }
+
   // ── Rutas comunes (chat, skills, conversaciones, tareas, verificación) ──
   const comun = await rutasComunes(c.nucleo, c, { metodo, ruta, cuerpo });
   if (comun?.sse) {
@@ -139,6 +156,7 @@ async function api(request, env, ctx, ruta, invitado) {
     ctx.waitUntil(tarea);
     return respuesta;
   }
+  if (comun?.archivo) return new Response(comun.archivo.texto, { headers: { 'Content-Type': comun.archivo.tipo, 'Content-Disposition': `attachment; filename="${comun.archivo.nombre}"`, 'Cache-Control': 'no-store' } });
   if (comun) return json(comun.datos, comun.estado);
   return json({ error: 'Ruta desconocida' }, 404);
 }
@@ -162,7 +180,7 @@ export default {
         if (demo.esDemo(env)) return json({ error: { message: 'La API no está en la versión de prueba', type: 'invalid_request_error' } }, 404);
         if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST' } });
         const usuario = await cuentas.usuarioDeClave(env, request);
-        if (!usuario) return json({ error: { message: 'Clave de lab.ia no válida (labia-…)', type: 'authentication_error' } }, 401);
+        if (!usuario) return json({ error: { message: 'Clave de laboratorio.ia no válida (labia-…)', type: 'authentication_error' } }, 401);
         return await manejarOpenAI(request, crearGateway(env, usuario.id), ruta);
       }
 

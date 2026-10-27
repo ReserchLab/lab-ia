@@ -1,6 +1,6 @@
 {
-  "name": "lab.ia",
-  "short_name": "lab.ia",
+  "name": "laboratorio.ia",
+  "short_name": "laboratorio.ia",
   "description": "Chat, investigación científica e imágenes con IA desde tu teléfono.",
   "start_url": "/",
   "display": "standalone",

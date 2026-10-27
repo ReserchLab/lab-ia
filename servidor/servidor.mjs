@@ -1,4 +1,4 @@
-// lab.ia — servidor de chat, investigación e imágenes sobre FreeLLMAPI.
+// laboratorio.ia — servidor de chat, investigación e imágenes sobre FreeLLMAPI.
 // Escucha en toda la red local (puerto 8790). Desde el propio teléfono entra sin PIN;
 // cualquier otro equipo de la red necesita el PIN que imprime al arrancar.
 import http from 'node:http';
@@ -16,7 +16,7 @@ import { Proveedores } from './lib/proveedores.mjs';
 import { crearNucleo } from '../comun/nucleo.mjs';
 import { rutasComunes } from '../comun/api.mjs';
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 // Muchas redes móviles no enrutan IPv6: probarlo primero hace que las conexiones expiren.
 dns.setDefaultResultOrder('ipv4first');
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
@@ -46,7 +46,7 @@ const tareas = {
   poner: (id, modelo) => { if (!modelo || modelo === 'auto') delete cfg.tareas[id]; else cfg.tareas[id] = modelo; guardarCfg(); },
 };
 
-// FreeLLMAPI tarda en arrancar en el teléfono (a veces más que lab.ia): se le espera en vez de fallar.
+// FreeLLMAPI tarda en arrancar en el teléfono (a veces más que laboratorio.ia): se le espera en vez de fallar.
 async function asegurarGateway(emitir, señal) {
   if (await gateway.enLinea()) return;
   emitir('estado', { texto: 'Esperando a que FreeLLMAPI termine de arrancar…' });
@@ -186,7 +186,7 @@ async function api(req, res, ruta, url) {
     });
   }
 
-  if (!autorizado(req)) return enviar(res, 401, { error: 'Necesitas el PIN de lab.ia' });
+  if (!autorizado(req)) return enviar(res, 401, { error: 'Necesitas el PIN de laboratorio.ia' });
 
   if (ruta === '/api/proveedores' && metodo === 'GET') return enviar(res, 200, await proveedores.lista());
   if (ruta === '/api/proveedores/sesion' && metodo === 'POST') {
@@ -203,6 +203,10 @@ async function api(req, res, ruta, url) {
 
   const comun = await rutasComunes(nucleo, { almacen, skills, tareas }, { metodo, ruta, cuerpo: () => leerCuerpo(req) });
   if (comun?.sse) return sse(res, comun.sse);
+  if (comun?.archivo) {
+    res.writeHead(200, { 'Content-Type': comun.archivo.tipo, 'Content-Disposition': `attachment; filename="${comun.archivo.nombre}"`, 'Cache-Control': 'no-store' });
+    return res.end(comun.archivo.texto);
+  }
   if (comun) return enviar(res, comun.estado, comun.datos);
 
   if (ruta === '/api/registro' && metodo === 'GET' && esLocal(req)) {
@@ -257,7 +261,7 @@ const servidor = http.createServer(async (req, res) => {
 });
 
 servidor.listen(cfg.puerto, '0.0.0.0', () => {
-  console.log(`lab.ia ${VERSION}`);
+  console.log(`laboratorio.ia ${VERSION}`);
   console.log(`  En este teléfono: http://127.0.0.1:${cfg.puerto}`);
   for (const d of direcciones()) console.log(`  ${d.tipo.padEnd(15)} ${d.url}`);
   console.log(`  PIN para otros equipos: ${cfg.pin}`);

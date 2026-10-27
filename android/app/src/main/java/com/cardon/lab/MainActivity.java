@@ -52,7 +52,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * lab.ia: un WebView que se conecta al servidor de lab.ia.
+ * laboratorio.ia: un WebView que se conecta al servidor de laboratorio.ia.
  * Por defecto busca el servidor en este mismo teléfono (Termux, 127.0.0.1:8790);
  * también puede usar otro teléfono o equipo de la misma red Wi-Fi.
  */
@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
         super.onCreate(estado);
         prefs = getSharedPreferences("lab", MODE_PRIVATE);
         web = new WebView(this);
-        web.setBackgroundColor(Color.BLACK);
+        aplicarTema(prefs.getString("tema", "oscuro"));
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -116,6 +116,22 @@ public class MainActivity extends Activity {
         pedirPermisos();
         aplicarServidorInicial();
         conectar();
+    }
+
+    /** Colores nativos del tema (barras del sistema y fondo) para que coincidan con la interfaz web. */
+    void aplicarTema(String tema) {
+        boolean claro = "claro".equals(tema);
+        int fondo = claro ? Color.rgb(245, 245, 242) : Color.BLACK;
+        web.setBackgroundColor(fondo);
+        getWindow().setStatusBarColor(fondo);
+        getWindow().setNavigationBarColor(fondo);
+        getWindow().getDecorView().setBackgroundColor(fondo);
+        if (Build.VERSION.SDK_INT >= 23) {
+            int f = getWindow().getDecorView().getSystemUiVisibility();
+            f = claro ? (f | android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f & ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            if (Build.VERSION.SDK_INT >= 26) f = claro ? (f | android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR) : (f & ~android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            getWindow().getDecorView().setSystemUiVisibility(f);
+        }
     }
 
     /** Pide de una vez los permisos que faltan: usar Termux y (Android 13+) notificaciones. */
@@ -250,7 +266,7 @@ public class MainActivity extends Activity {
         if (codigo == PERMISO_TERMUX && resultados.length > 0 && resultados[0] == PackageManager.PERMISSION_GRANTED) {
             encenderEnTermux();
         } else if (codigo == PERMISO_TERMUX) {
-            js("aviso('Sin permiso para usar Termux. Actívalo en Ajustes de Android → Apps → lab.ia → Permisos.')");
+            js("aviso('Sin permiso para usar Termux. Actívalo en Ajustes de Android → Apps → laboratorio.ia → Permisos.')");
         }
     }
 
@@ -303,7 +319,7 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Busca servidores de lab.ia en la red local (misma subred /24, puerto 8790). */
+    /** Busca servidores de laboratorio.ia en la red local (misma subred /24, puerto 8790). */
     void buscarEnRed() {
         hilos.execute(() -> {
             List<String> propias = new ArrayList<>();
@@ -414,12 +430,41 @@ public class MainActivity extends Activity {
             if (i != null) startActivity(i);
         }
 
-        @JavascriptInterface public void copiar(String texto) {
-            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            cm.setPrimaryClip(ClipData.newPlainText("lab.ia", texto));
+        /** La interfaz web avisa del tema elegido (noche/día); se recuerda para el próximo arranque. */
+        @JavascriptInterface public void tema(String tema) {
+            String t = "claro".equals(tema) ? "claro" : "oscuro";
+            prefs.edit().putString("tema", t).apply();
+            runOnUiThread(() -> aplicarTema(t));
+        }
+        @JavascriptInterface public String temaActual() { return prefs.getString("tema", "oscuro"); }
+
+        /** Descarga un archivo del servidor (datos de entrenamiento) a Descargas, con la sesión. */
+        @JavascriptInterface public void descargar(String url) {
+            if (url == null || !url.startsWith(MainActivity.this.servidor() + "/api/entrenamiento/")) return;
+            runOnUiThread(() -> {
+                try {
+                    String nombre = "laboratorio-ia-" + url.substring(url.lastIndexOf('/') + 1).replace(".jsonl", "") + "-" + (System.currentTimeMillis() / 1000) + ".jsonl";
+                    DownloadManager.Request r = new DownloadManager.Request(Uri.parse(url));
+                    String galleta = CookieManager.getInstance().getCookie(url);
+                    if (galleta != null) r.addRequestHeader("Cookie", galleta);
+                    r.setTitle("laboratorio.ia · " + nombre);
+                    r.setMimeType("application/x-ndjson");
+                    r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    r.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, nombre);
+                    ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+                    Toast.makeText(MainActivity.this, "Guardando en Descargas/" + nombre, Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "No se pudo descargar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
         }
 
-        /** Guarda una imagen del servidor en Imágenes/lab.ia. */
+        @JavascriptInterface public void copiar(String texto) {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(ClipData.newPlainText("laboratorio.ia", texto));
+        }
+
+        /** Guarda una imagen del servidor en Imágenes/laboratorio.ia. */
         @JavascriptInterface public void guardarImagen(String url) {
             if (url == null || !url.startsWith(MainActivity.this.servidor() + "/media/")) return;
             runOnUiThread(() -> {
@@ -428,11 +473,11 @@ public class MainActivity extends Activity {
                     DownloadManager.Request r = new DownloadManager.Request(Uri.parse(url));
                     String galleta = CookieManager.getInstance().getCookie(url);
                     if (galleta != null) r.addRequestHeader("Cookie", galleta);
-                    r.setTitle("lab.ia · " + nombre);
+                    r.setTitle("laboratorio.ia · " + nombre);
                     r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                    r.setDestinationInExternalPublicDir(Environment.DIRECTORY_PICTURES, "lab.ia/" + nombre);
+                    r.setDestinationInExternalPublicDir(Environment.DIRECTORY_PICTURES, "laboratorio.ia/" + nombre);
                     ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
-                    Toast.makeText(MainActivity.this, "Guardando en Imágenes/lab.ia", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Guardando en Imágenes/laboratorio.ia", Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {
                     Toast.makeText(MainActivity.this, "No se pudo guardar: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 }
