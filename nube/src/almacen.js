@@ -74,6 +74,16 @@ export class AlmacenD1 {
     return [...convs.values()];
   }
 
+  /** Ejemplos generados para entrenar (destilación), con la misma forma que una conversación. */
+  async sinteticos() {
+    const r = await this.db.prepare('SELECT id, datos FROM sinteticos WHERE usuario = ? ORDER BY creado LIMIT 5000').bind(this.u).all();
+    return r.results.map(f => ({ id: f.id, sintetica: true, ...JSON.parse(f.datos) }));
+  }
+
+  async borrarSinteticos() {
+    await this.db.prepare('DELETE FROM sinteticos WHERE usuario = ?').bind(this.u).run();
+  }
+
   async renombrar(id, titulo) {
     await this.db.prepare('UPDATE conversaciones SET titulo = ? WHERE id = ? AND usuario = ?').bind(titulo, id, this.u).run();
   }

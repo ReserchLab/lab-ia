@@ -1328,10 +1328,15 @@ curl ${esc(base)}/chat/completions \
 
   async function hojaEntrenamiento() {
     abrirHoja('Entrenar tu modelo', '<p class="tenue">Contando tus datos…</p>', null, true);
-    let d, loras = null;
+    let d, loras = null, auto = null;
     try {
       d = await api('/api/entrenamiento');
-      if (est.estadoServidor?.nube) loras = (await api('/api/entrenamiento/modelos').catch(() => ({ modelos: [] }))).modelos;
+      if (est.estadoServidor?.nube && !est.estadoServidor?.demo) {
+        [loras, auto] = await Promise.all([
+          api('/api/entrenamiento/modelos').then(r => r.modelos, () => []),
+          api('/api/entrenamiento/auto').catch(() => null),
+        ]);
+      }
     } catch (err) { $('#hoja-cuerpo').innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
     const cifra = (n, t) => `<div class="cifra"><b>${n}</b><small>${t}</small></div>`;
     const archivo = (id, nombre, n, desc) => `<button class="fila-archivo" data-bajar="${id}"${n ? '' : ' disabled'}><span><b>${nombre}</b><small>${desc}</small></span><code>${n}</code></button>`;
@@ -1339,8 +1344,9 @@ curl ${esc(base)}/chat/completions \
       <p class="tenue" style="font-size:13px;margin:0 0 10px">Todo se queda en tu laboratorio.ia hasta que tú lo descargas. Nada se envía a otros servicios.</p>
       <div class="cifras">
         ${cifra(d.respuestas, 'respuestas')}${cifra(d.buenas, '▲ buenas')}${cifra(d.malas, '▼ malas')}
-        ${cifra(d.descartadas, 'regeneradas')}${cifra(d.ediciones, 'editadas')}${cifra(d.combinaciones, 'combinaciones')}
+        ${cifra(d.descartadas, 'regeneradas')}${cifra(d.ediciones, 'editadas')}${cifra(d.sinteticos || 0, 'generadas')}
       </div>
+      ${auto ? `<div class="panel panel-auto" id="panel-auto">${htmlAuto(auto)}</div>` : ''}
       <div class="panel">
         <h3>1 · Descarga tus datos (JSONL)</h3>
         ${archivo('sft', 'Ajuste supervisado (SFT)', d.sft, 'Todas tus respuestas salvo las ▼, con su contexto y fuentes')}
@@ -1368,7 +1374,40 @@ curl ${esc(base)}/chat/completions \
       </div>` : `<div class="panel"><h3>3 · Úsalo</h3><p class="tenue" style="font-size:13px;margin:0">En tu laboratorio.ia de Cloudflare el modelo entrenado se añade aquí mismo. En el teléfono, cárgalo en Ollama o LM Studio con el adaptador que descarga el cuaderno.</p></div>`}`;
     $('#hoja-cuerpo').innerHTML = html;
     const cuerpo = $('#hoja-cuerpo');
+    // Progreso en vivo mientras la hoja esté abierta.
+    clearInterval(est.relojAuto);
+    if (auto) {
+      est.relojAuto = setInterval(async () => {
+        const panel = document.getElementById('panel-auto');
+        if (!panel || $('#hoja').hidden) { clearInterval(est.relojAuto); return; }
+        if (panel.querySelector('form :focus')) return; // no borrar lo que el usuario escribe
+        try { panel.innerHTML = htmlAuto(await api('/api/entrenamiento/auto')); } catch { /* reintenta en el siguiente */ }
+      }, 8000);
+    }
+    cuerpo.onsubmit = async ev => {
+      if (ev.target.id !== 'form-auto') return;
+      ev.preventDefault();
+      const f = ev.target;
+      const boton = f.querySelector('button[type=submit]');
+      boton.disabled = true;
+      boton.textContent = 'Empezando…';
+      try {
+        const r = await api('/api/entrenamiento/auto', { metodo: 'POST', cuerpo: {
+          objetivo: Number(f.querySelector('#auto-objetivo').value), temas: f.querySelector('#auto-temas').value,
+          base: f.querySelector('#auto-base').value, nombre: f.querySelector('#auto-nombre').value, epocas: 2,
+        } });
+        document.getElementById('panel-auto').innerHTML = htmlAuto({ ...auto, trabajo: r.trabajo });
+        aviso('Entrenamiento en marcha. Puedes cerrar la app: sigue en tu nube.', 4000);
+      } catch (err) { aviso(err.message, 5000); boton.disabled = false; boton.textContent = '✦ Entrenar automáticamente'; }
+    };
     cuerpo.onclick = async ev => {
+      if (ev.target.closest('[data-auto="cancelar"]') && confirm('¿Cancelar el entrenamiento? Los ejemplos ya generados se conservan.')) {
+        const r = await api('/api/entrenamiento/auto', { metodo: 'DELETE' });
+        document.getElementById('panel-auto').innerHTML = htmlAuto({ ...auto, trabajo: r.trabajo });
+      }
+      if (ev.target.closest('[data-auto="nuevo"]')) { auto.trabajo = null; document.getElementById('panel-auto').innerHTML = htmlAuto(auto); }
+      if (ev.target.closest('[data-auto="usar"]')) { cargarModelos(); cerrarHoja(); hojaModelo(); }
+      if (ev.target.closest('[data-auto="proveedores"]')) hojaProveedores();
       const b = ev.target.closest('[data-bajar]');
       if (b) { descargarArchivo(`/api/entrenamiento/${b.dataset.bajar}.jsonl`); aviso('Descargando…'); }
       const q = ev.target.closest('[data-quitar-lora]');
@@ -1390,6 +1429,41 @@ curl ${esc(base)}/chat/completions \
         if (!r.prueba?.ok) $('#hoja-cuerpo').insertAdjacentHTML('afterbegin', `<p class="error">Workers AI no encontró o no pudo usar ese ajuste fino: ${esc(r.prueba?.error || '')}. Comprueba el nombre con «npx wrangler ai finetune list».</p>`);
       } catch (err) { res.textContent = err.message; }
     });
+  }
+
+  const FASES = [['destilando', 'Generando datos'], ['lanzar', 'Enviando a Kaggle'], ['entrenando', 'Entrenando en GPU'], ['subiendo', 'Subiendo a Workers AI'], ['listo', 'Listo']];
+
+  const duracion = ms => (ms < 3600_000 ? `${Math.max(1, Math.round(ms / 60_000))} min` : `${Math.round(ms / 360_000) / 10} h`);
+
+  /** Panel del entrenamiento automático: formulario o progreso del trabajo actual. */
+  function htmlAuto(a) {
+    const t = a.trabajo;
+    const activo = t && ['destilando', 'lanzar', 'entrenando', 'subiendo'].includes(t.fase);
+    if (t && (activo || t.fase === 'listo' || t.fase === 'error' || t.fase === 'cancelado')) {
+      const i = FASES.findIndex(f => f[0] === t.fase);
+      const pct = t.fase === 'destilando' && t.objetivo ? Math.round(100 * t.hechos / t.objetivo) : null;
+      return `<h3>✦ Entrenamiento automático</h3>
+        <ol class="fases">${FASES.map(([id, nom], k) => `<li class="${k < i || t.fase === 'listo' ? 'hecha' : k === i && activo ? 'actual' : ''}">${nom}${id === 'destilando' && t.objetivo ? ` <small>${t.hechos}/${t.objetivo}</small>` : ''}</li>`).join('')}</ol>
+        ${pct != null && activo ? `<div class="barra-prog"><i style="width:${pct}%"></i></div><p class="tenue" style="font-size:12px;margin:4px 0 0">${t.hechos ? `faltan ~${duracion((Date.now() - t.creado) / t.hechos * (t.objetivo - t.hechos))} · ` : 'Investigando cada pregunta en varias fuentes… · '}sigue aunque cierres la app.</p>` : ''}
+        ${t.fase === 'entrenando' ? '<p class="tenue" style="font-size:13px;margin:6px 0 0">Kaggle entrena en su GPU: suele tardar 20-60 min (más si hay cola).</p>' : ''}
+        ${t.fase === 'listo' ? `<p style="margin:8px 0 0">★ <b>${esc(t.lora || t.nombre)}</b> ${t.prueba?.ok ? 'ya responde.' : 'está subido, pero aún no responde: ' + esc(t.prueba?.error || '')}</p>${t.resultado?.muestra ? `<details style="margin-top:6px"><summary class="tenue" style="font-size:13px">Ejemplo de respuesta</summary><div class="instrucciones-skill">${esc(t.resultado.muestra)}</div></details>` : ''}` : ''}
+        ${t.fase === 'error' ? `<p class="error" style="margin:8px 0 0">${esc(t.error || 'Error')}</p>` : ''}
+        ${t.kaggle?.url ? `<p style="font-size:13px;margin:6px 0 0"><a href="${esc(t.kaggle.url)}" target="_blank" rel="noopener">Ver el trabajo en Kaggle ↗</a></p>` : ''}
+        <details class="registro-auto"><summary class="tenue" style="font-size:13px">Registro</summary>${(t.registro || []).slice().reverse().map(r => `<div><small>${new Date(r.t).toLocaleTimeString()}</small> ${esc(r.texto)}</div>`).join('')}</details>
+        <div class="fila-botones">${activo ? '<button class="btn chico" data-auto="cancelar">Cancelar</button>' : `${t.fase === 'listo' ? '<button class="btn chico primario" data-auto="usar">Usar mi modelo</button>' : ''}<button class="btn chico" data-auto="nuevo">Entrenar otro</button>`}</div>`;
+    }
+    const falta = [!a.kaggle && 'tu clave de <b>Kaggle</b> (GPU gratis, 30 h/semana)', !a.cloudflare && 'una clave de <b>Cloudflare API</b> para subir el modelo'].filter(Boolean);
+    return `<h3>✦ Entrenar automáticamente</h3>
+      <p style="font-size:14px;margin:0 0 8px">laboratorio.ia genera preguntas de tus temas, las responde investigando con fuentes, junta eso con tus conversaciones, entrena en la GPU gratis de Kaggle y sube el modelo a tu nube. Todo solo.</p>
+      ${falta.length ? `<p class="error" style="margin:0 0 8px">Falta ${falta.join(' y ')}.</p><div class="fila-botones" style="margin-top:0"><button class="btn chico rojo" data-auto="proveedores">⚿ Añadir claves</button></div>` : `
+      <form id="form-auto" class="campo" style="display:grid;gap:8px">
+        <label class="tenue" style="font-size:12px">Ejemplos a generar <select id="auto-objetivo"><option value="0">0: solo mis conversaciones</option><option value="60">60 (~1 h)</option><option value="150" selected>150 (~3 h, recomendado)</option><option value="300">300 (~6 h)</option></select></label>
+        <label class="tenue" style="font-size:12px">Temas (separados por comas)<textarea id="auto-temas" rows="3">${esc(a.temas.join(', '))}</textarea></label>
+        <label class="tenue" style="font-size:12px">Modelo base <select id="auto-base"><option value="@cf/meta/llama-3.2-3b-instruct">Llama 3.2 3B (recomendado)</option><option value="@cf/mistral/mistral-7b-instruct-v0.2-lora">Mistral 7B</option><option value="@cf/google/gemma-7b-it-lora">Gemma 7B</option><option value="@cf/google/gemma-2b-it-lora">Gemma 2B</option></select></label>
+        <input id="auto-nombre" placeholder="nombre (p. ej. mi-laboratorio)" value="mi-laboratorio">
+        <button class="btn chico rojo" type="submit">✦ Entrenar automáticamente</button>
+      </form>`}
+      ${t?.fase === 'error' ? `<p class="tenue" style="font-size:12px">Último intento: ${esc(t.error || '')}</p>` : ''}`;
   }
 
   // ── Memoria del chat ─────────────────────────────────────────────────────
@@ -1509,7 +1583,7 @@ curl ${esc(base)}/chat/completions \
       <div class="panel prov" data-prov="${p.id}" style="padding:10px 12px;margin:8px 0">
         <button class="opcion" data-abrir="${p.id}" style="padding:4px 0">
           <span class="ic" style="color:var(${p.configurado ? (p.estado === 'sana' || p.estado === 'healthy' ? '--verde' : '--texto') : '--apagado'})">${p.configurado ? '●' : p.sinClave ? '○' : '·'}</span>
-          <span class="txt"><span class="nm">${esc(p.nombre)}${p.tipo === 'búsqueda' ? ' <small class="tenue">· búsqueda</small>' : ''}</span>
+          <span class="txt"><span class="nm">${esc(p.nombre)}${p.tipo && p.tipo !== 'chat' ? ` <small class="tenue">· ${esc(p.tipo)}</small>` : ''}</span>
           <span class="ds">${p.configurado ? 'Configurado' + (p.estado ? ' · ' + esc(p.estado) : '') : p.sinClave ? 'Funciona sin clave' : 'Necesita clave'}${p.nota ? ' · ' + esc(p.nota) : ''}</span></span>
         </button>
         <div class="detalle-prov" hidden>

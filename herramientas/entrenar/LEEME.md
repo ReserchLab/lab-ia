@@ -23,7 +23,22 @@ Los datos no salen de tu laboratorio.ia hasta que tú los descargas.
 
 Es el formato de chat de OpenAI y Hugging Face: sirve para Unsloth, TRL, Axolotl, AutoTrain o el ajuste fino de OpenAI. Con unos 50 ejemplos SFT o 30 pares DPO ya se nota el cambio. Con varios cientos, mucho más.
 
-## 2. Entrena gratis en Google Colab
+## Automático (recomendado, en tu nube de Cloudflare)
+
+**Ajustes → Entrenar tu propio modelo → ✦ Entrenar automáticamente.** laboratorio.ia lo hace todo solo, aunque cierres la app:
+
+1. **Genera datos (destilación).** Escribe preguntas sobre tus temas y las responde investigando en las bases científicas, con citas. Hace 3 por minuto, más o menos. Cada una se guarda también junto a una respuesta sin fuentes, que sirve como «peor» para el DPO. A eso se suman tus conversaciones, ▲▼, ediciones y combinaciones.
+2. **Entrena en Kaggle.** Envía el script [`kaggle.py`](kaggle.py) a tu cuenta de Kaggle, que tiene GPU gratis 30 h a la semana, con un enlace de un solo uso a tus datos. El enlace caduca al terminar. Kaggle entrena SFT y, si hay 20 pares o más, también DPO.
+3. **Lo sube y lo activa.** Descarga el adaptador LoRA, lo sube a tu Workers AI y lo añade como **★ tu modelo**.
+
+Necesita dos claves en **Ajustes → Modelos y proveedores**:
+
+- **Kaggle**: en [kaggle.com/settings](https://www.kaggle.com/settings) → API → *Create New Token*. Pega el contenido de `kaggle.json` o escríbela como `usuario:clave`. Kaggle exige verificar el teléfono para usar GPU e Internet.
+- **Cloudflare API**: `ID_DE_CUENTA:TOKEN`, con un token con permiso «Workers AI: Edit». Otra opción son los secretos `CF_ACCOUNT_ID` y `CF_API_TOKEN` del Worker.
+
+Un cron del Worker avanza un paso por minuto, dentro del plan gratuito. 150 ejemplos tardan entre 1 y 3 horas, y el entrenamiento entre 20 y 60 minutos más.
+
+## A mano: entrena gratis en Google Colab
 
 [**▶ Abrir el cuaderno en Colab**](https://colab.research.google.com/github/ReserchLab/lab-ia/blob/main/herramientas/entrenar/entrenar.ipynb)
 

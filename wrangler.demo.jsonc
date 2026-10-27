@@ -13,5 +13,6 @@
     "REPO": "https://github.com/ReserchLab/lab-ia",
     "DEMO": "si"
   },
+  "rules": [{ "type": "Text", "globs": ["**/*.py"], "fallthrough": true }],
   "observability": { "enabled": true }
 }

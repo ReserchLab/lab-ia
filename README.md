@@ -30,7 +30,7 @@ En tu propia cuenta de Cloudflare (gratis) o dentro de tu teléfono. Libre y sin
 - **Modelos por tarea**: uno para conversar, otro para investigar, razonar, programar e imágenes, con recomendaciones probadas.
 - **Varios modelos a la vez**: compara 2-4 respuestas en pestañas, elige la mejor (★) y recibe una integrada.
 - **Edita y regenera**: corrige cualquier pregunta anterior y vuelve a enviarla, o regenera la última respuesta. Valora cada respuesta con ▲ / ▼.
-- **Entrena tu propio modelo**: tus valoraciones, ediciones, regeneraciones y elecciones se exportan como datos **SFT** y **DPO** (JSONL). Un [cuaderno de Colab gratis](herramientas/entrenar/LEEME.md) entrena un adaptador LoRA y lo sube a tu Workers AI, y aparece en laboratorio.ia como ★ tu modelo.
+- **Entrena tu propio modelo**: tus valoraciones, ediciones, regeneraciones y elecciones se exportan como datos **SFT** y **DPO** (JSONL). Con **✦ Entrenar automáticamente**, laboratorio.ia genera más datos investigando tus temas, entrena un adaptador LoRA en la GPU gratis de Kaggle y lo sube a tu Workers AI, todo solo. También hay un [cuaderno de Colab](herramientas/entrenar/LEEME.md) para hacerlo a mano. Aparece como ★ tu modelo.
 - **API compatible con OpenAI** con tu clave `labia-…`: usa tus modelos desde Codex, Cline o el SDK de OpenAI.
 - Interfaz de matriz de puntos con **modo noche** (por defecto) y **modo día**, pensada para el móvil (Nothing, Android) y que se adapta a tablet y escritorio.
 

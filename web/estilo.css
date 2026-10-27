@@ -376,3 +376,18 @@ details.combinacion { border: 1px solid var(--linea); border-radius: 14px; margi
 .fila-archivo code { font-size: 13px; color: var(--rojo); }
 button.fila-archivo:hover:not(:disabled) { border-color: var(--tenue); }
 .fila-archivo:disabled { opacity: .45; }
+
+/* Entrenamiento automático */
+.panel-auto { border-color: var(--rojo); }
+.fases { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 4px; }
+.fases li { font-size: 14px; color: var(--apagado); padding-left: 22px; position: relative; }
+.fases li::before { content: '○'; position: absolute; left: 0; }
+.fases li.hecha { color: var(--texto); } .fases li.hecha::before { content: '●'; color: var(--verde); }
+.fases li.actual { color: var(--texto); font-weight: 600; } .fases li.actual::before { content: '◉'; color: var(--rojo); animation: latido 1.2s infinite; }
+.fases small { color: var(--tenue); font: 12px var(--mono); }
+@keyframes latido { 50% { opacity: .3; } }
+.barra-prog { height: 6px; border-radius: 6px; background: var(--sup2); overflow: hidden; }
+.barra-prog i { display: block; height: 100%; background: var(--rojo); transition: width .4s; }
+.registro-auto div { font-size: 12.5px; padding: 3px 0; border-bottom: 1px dashed var(--linea); }
+.registro-auto small { color: var(--apagado); font-family: var(--mono); margin-right: 6px; }
+.campo label { display: grid; gap: 4px; }

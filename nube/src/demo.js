@@ -76,6 +76,6 @@ export function rutaBloqueada(metodo, ruta) {
   if (ruta.startsWith('/api/proveedores/') && metodo !== 'GET') return true;
   if (ruta.startsWith('/api/tareas') && metodo !== 'GET') return true;
   if (ruta.startsWith('/api/skills') && metodo !== 'GET') return true;
-  if (ruta.startsWith('/api/entrenamiento/modelos')) return true;
+  if (ruta.startsWith('/api/entrenamiento/modelos') || ruta.startsWith('/api/entrenamiento/auto') || ruta.startsWith('/api/entrenamiento/sinteticos')) return true;
   return false;
 }

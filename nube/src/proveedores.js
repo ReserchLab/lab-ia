@@ -4,6 +4,7 @@
 import { recomendados } from '../../comun/tareas.mjs';
 import { cifrar, descifrar } from './cifrado.js';
 import { esDePago, generarDePago, modelosDePago } from '../../comun/imagenes-pago.mjs';
+import { normalizarKaggle, probarCloudflare, probarKaggle } from './entrenador.js';
 
 // Modelos de Workers AI disponibles en el plan gratuito (probados uno a uno, 2026-10-26).
 const WAI_TEXTO = [
@@ -54,6 +55,8 @@ export const CATALOGO = [
   { id: 'llm7', nombre: 'LLM7', base: 'https://api.llm7.io/v1', nota: 'clave gratis', enlace: 'https://dash.llm7.io/#/api-keys' },
   { id: 'zai', nombre: 'Z.ai (GLM)', base: 'https://api.z.ai/api/paas/v4', nota: 'GLM-4.x Flash gratis', enlace: 'https://z.ai/manage-apikey/apikey-list' },
   { id: 'deepseek', nombre: 'DeepSeek', base: 'https://api.deepseek.com/v1', nota: 'de pago, muy barato', enlace: 'https://platform.deepseek.com/api_keys' },
+  { id: 'kaggle', nombre: 'Kaggle (GPU para entrenar)', tipo: 'entrenamiento', nota: 'gratis: 30 h de GPU a la semana. Formato usuario:clave (o pega kaggle.json). Verifica tu teléfono en Kaggle', enlace: 'https://www.kaggle.com/settings', recomendado: 'Entrenar tu propio modelo automáticamente' },
+  { id: 'cloudflare', nombre: 'Cloudflare API (subir tu modelo)', tipo: 'entrenamiento', nota: 'formato ID_DE_CUENTA:TOKEN; token con permiso «Workers AI: Edit»', enlace: 'https://dash.cloudflare.com/profile/api-tokens' },
   { id: 'openai', nombre: 'OpenAI', base: 'https://api.openai.com/v1', filtro: id => /^(gpt|o\d)/.test(id) && !/audio|realtime|tts|transcribe|image|search/.test(id), nota: 'de pago: texto y GPT Image', enlace: 'https://platform.openai.com/api-keys', recomendado: 'Imágenes GPT Image (desde ~0,005 US$ con gpt-image-1-mini)' },
 ];
 const POR_ID = Object.fromEntries(CATALOGO.map(p => [p.id, p]));
@@ -361,7 +364,7 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
   async function lista() {
     const mias = await misClaves();
     const proveedores = CATALOGO.map(p => ({
-      id: p.id, nombre: p.nombre, tipo: p.tipo === 'busqueda' ? 'búsqueda' : 'chat',
+      id: p.id, nombre: p.nombre, tipo: p.tipo === 'busqueda' ? 'búsqueda' : p.tipo || 'chat',
       sinClave: Boolean(p.sinClave), configurado: Boolean(p.sinClave || mias[p.id]), propia: Boolean(mias[p.id]),
       estado: mias[p.id]?.estado || (p.sinClave ? 'sana' : null), detalle: mias[p.id]?.detalle || '',
       enlace: p.enlace, nota: p.nota || '', recomendado: p.recomendado || '',
@@ -370,6 +373,8 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
   }
 
   async function probarClave(p, clave) {
+    if (p.id === 'kaggle') return probarKaggle(clave);
+    if (p.id === 'cloudflare') return probarCloudflare(clave);
     if (p.id === 'tavily') {
       const r = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}` }, body: JSON.stringify({ query: 'test', max_results: 1 }), signal: AbortSignal.timeout(20_000) });
       return { ok: r.ok, detalle: r.ok ? '' : `HTTP ${r.status}` };
@@ -384,6 +389,7 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
   async function agregar(plataforma, clave) {
     const p = POR_ID[plataforma];
     if (!p || p.id === 'workersai') throw Object.assign(new Error('Proveedor desconocido'), { estado: 400 });
+    if (p.id === 'kaggle') clave = normalizarKaggle(clave);
     const prueba = await probarClave(p, clave).catch(e => ({ ok: false, detalle: e.message }));
     const { cifrada, iv } = await cifrar(env, clave);
     await env.DB.batch([
@@ -398,5 +404,5 @@ export function crearGateway(env, usuario, { sinWorkersAI = false } = {}) {
     await env.DB.prepare('DELETE FROM claves WHERE usuario = ? AND proveedor = ?').bind(usuario, plataforma).run();
   }
 
-  return { completar, conversar, imagen, modelosTexto, modelosImagen, buscar, enLinea: async () => true, lista, agregar, quitar, misLoras, ponerLoras };
+  return { completar, conversar, imagen, modelosTexto, modelosImagen, buscar, enLinea: async () => true, lista, agregar, quitar, misLoras, ponerLoras, claveDe };
 }

@@ -3,6 +3,7 @@
 //   · valoración 👍/👎 de cada respuesta (meta.valoracion = 1 | -1)
 //   · respuestas descartadas al regenerar (meta.descartadas, en la respuesta nueva)
 //   · preguntas editadas (meta.edicion, en la pregunta nueva: texto y respuesta anteriores)
+//   · ejemplos generados (destilación en la nube): preguntas respondidas investigando, frente a una respuesta sin fuentes
 //   · combinación de modelos: respuestas de cada modelo, la integrada y la que eligió el usuario (meta.preferido)
 // Formatos de salida (JSONL, uno por línea):
 //   sft  → {"messages":[system, …turnos, assistant]}                       (ajuste fino supervisado)
@@ -39,7 +40,7 @@ export function construirDatos(conversaciones, { soloValoradas = false } = {}) {
   const sft = [];
   const dpo = [];
   const senales = [];
-  const cuenta = { conversaciones: conversaciones.length, respuestas: 0, buenas: 0, malas: 0, descartadas: 0, ediciones: 0, combinaciones: 0 };
+  const cuenta = { conversaciones: conversaciones.filter(c => !c.sintetica).length, sinteticos: 0, respuestas: 0, buenas: 0, malas: 0, descartadas: 0, ediciones: 0, combinaciones: 0 };
 
   for (const c of conversaciones) {
     const ms = c.mensajes;
@@ -50,7 +51,7 @@ export function construirDatos(conversaciones, { soloValoradas = false } = {}) {
         senales.push({ tipo: 'edicion', conversacion: c.id, antes: meta.edicion.antes, despues: m.contenido, respuestaAnterior: meta.edicion.respuesta || null, modeloAnterior: meta.edicion.modelo || null });
       }
       if (!util(m)) return;
-      cuenta.respuestas++;
+      if (c.sintetica) cuenta.sinteticos++; else cuenta.respuestas++;
       const v = meta.valoracion || 0;
       if (v > 0) cuenta.buenas++;
       if (v < 0) cuenta.malas++;
@@ -63,8 +64,8 @@ export function construirDatos(conversaciones, { soloValoradas = false } = {}) {
       // Regenerar = la respuesta anterior gustó menos que la nueva (salvo que la nueva tenga 👎).
       for (const d of meta.descartadas || []) {
         if (!d.texto?.trim()) continue;
-        cuenta.descartadas++;
-        if (v >= 0) dpo.push({ prompt: p, chosen: [yo], rejected: [{ role: 'assistant', content: d.texto.trim() }], origen: 'regenerar', modelos: [m.modelo || meta.modelo, d.modelo] });
+        if (!c.sintetica) cuenta.descartadas++;
+        if (v >= 0) dpo.push({ prompt: p, chosen: [yo], rejected: [{ role: 'assistant', content: d.texto.trim() }], origen: d.origen || 'regenerar', modelos: [m.modelo || meta.modelo, d.modelo] });
         else dpo.push({ prompt: p, chosen: [{ role: 'assistant', content: d.texto.trim() }], rejected: [yo], origen: 'regenerar-peor', modelos: [d.modelo, meta.modelo] });
       }
 
@@ -84,7 +85,7 @@ export function construirDatos(conversaciones, { soloValoradas = false } = {}) {
         }
       }
 
-      if (v || meta.descartadas?.length || comb || meta.revision) {
+      if (!c.sintetica && (v || meta.descartadas?.length || comb || meta.revision)) {
         senales.push({
           tipo: 'respuesta', conversacion: c.id, mensaje: m.id, modelo: meta.modelo, modo: meta.modo, skill: meta.skill, valoracion: v,
           pregunta: p[p.length - 1].content.slice(0, 4000), respuesta: m.contenido,

@@ -13,5 +13,9 @@
   "vars": {
     "REPO": "https://github.com/ReserchLab/lab-ia"
   },
+  // Entrenamiento automático: avanza un paso cada minuto (destilar, Kaggle, subir el modelo).
+  "triggers": { "crons": ["* * * * *"] },
+  // El script de entrenamiento de Kaggle se importa como texto.
+  "rules": [{ "type": "Text", "globs": ["**/*.py"], "fallthrough": true }],
   "observability": { "enabled": true }
 }

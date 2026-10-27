@@ -467,7 +467,8 @@ Usa modo "investigar" si la skill necesita evidencia publicada; "imagen" si gene
   }
 
   async function datosEntrenamiento(opciones) {
-    return construirDatos(await almacen.exportable(), opciones);
+    const sinteticos = (await almacen.sinteticos?.()) || [];
+    return construirDatos([...(await almacen.exportable()), ...sinteticos], opciones);
   }
 
   return {

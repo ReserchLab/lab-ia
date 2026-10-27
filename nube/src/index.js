@@ -4,6 +4,7 @@ import './red.js';
 import { crearNucleo } from '../../comun/nucleo.mjs';
 import { rutasComunes } from '../../comun/api.mjs';
 import { BASES_LORA } from '../../comun/entrenamiento.mjs';
+import * as entrenador from './entrenador.js';
 import { asegurarEsquema } from './esquema.js';
 import { AlmacenD1, tareasD1 } from './almacen.js';
 import { SkillsD1 } from './skills.js';
@@ -133,6 +134,24 @@ async function api(request, env, ctx, ruta, invitado) {
   const pq = ruta.match(/^\/api\/proveedores\/clave\/([\w-]+)$/);
   if (pq && metodo === 'DELETE') { await c.gateway.quitar(pq[1]); return json({ ok: true }); }
 
+  // ── Entrenamiento automático (destilación + Kaggle + Workers AI) ──
+  if (ruta === '/api/entrenamiento/auto' && metodo === 'GET') {
+    const t = await entrenador.ultimo(env, usuario.id);
+    const claves = await c.gateway.lista();
+    const tiene = id => claves.proveedores.find(p => p.id === id)?.propia;
+    return json({ trabajo: entrenador.vistaPublica(t), kaggle: Boolean(tiene('kaggle')), cloudflare: Boolean(env.CF_API_TOKEN || tiene('cloudflare')), temas: entrenador.TEMAS });
+  }
+  if (ruta === '/api/entrenamiento/auto' && metodo === 'POST') {
+    const t = await entrenador.crear(env, usuario.id, new URL(request.url).origin, c.gateway, await cuerpo());
+    ctx.waitUntil(entrenador.avanzar(env, contexto)); // primer paso ya, sin esperar al cron
+    return json({ trabajo: entrenador.vistaPublica(t) });
+  }
+  if (ruta === '/api/entrenamiento/auto' && metodo === 'DELETE') {
+    const t = await entrenador.cancelar(env, usuario.id);
+    return json({ trabajo: entrenador.vistaPublica(t) });
+  }
+  if (ruta === '/api/entrenamiento/sinteticos' && metodo === 'DELETE') { await c.almacen.borrarSinteticos(); return json({ ok: true }); }
+
   // ── Modelos propios (LoRA en Workers AI) ──
   if (ruta === '/api/entrenamiento/modelos' && metodo === 'GET') return json({ modelos: await c.gateway.misLoras() });
   if (ruta === '/api/entrenamiento/modelos' && metodo === 'POST') {
@@ -167,6 +186,13 @@ export default {
     const ruta = decodeURIComponent(url.pathname);
     try {
       await asegurarEsquema(env.DB);
+
+      // Datos para el script de entrenamiento en Kaggle: enlace de un solo uso, sin sesión.
+      const dt = ruta.match(/^\/api\/entrenamiento\/datos\/([a-f0-9]{48})$/);
+      if (dt && !demo.esDemo(env)) {
+        const datos = await entrenador.datosPorToken(env, dt[1], contexto);
+        return datos ? json(datos) : json({ error: 'Enlace caducado' }, 404);
+      }
 
       if (ruta.startsWith('/api/')) {
         if (!demo.esDemo(env)) return await api(request, env, ctx, ruta);
@@ -206,5 +232,12 @@ export default {
     } catch (e) {
       return json({ error: explicarNube(e) || e.message }, e.estado || 500);
     }
+  },
+
+  // Cron (cada minuto): avanza los entrenamientos automáticos.
+  async scheduled(evento, env, ctx) {
+    if (demo.esDemo(env)) return;
+    await asegurarEsquema(env.DB);
+    ctx.waitUntil(entrenador.avanzar(env, contexto));
   },
 };
